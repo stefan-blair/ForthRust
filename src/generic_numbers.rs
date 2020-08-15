@@ -20,99 +20,49 @@ pub trait MemoryOperations<T> {
 }
 
 /**
- * There are some numeric operations, negate and absolute value, that can by default only be performed on 
- * signed numbers.  Create a trait such that signed numbers can perform these operations, while unsigned
- * numbers will simply return unchanged.
+ * Define a "generic number" type, which is what gets manipulated.  This comes with some accompanying methods
+ * used for interacting with the stack and memory.
  */
-pub trait SignedOperations {
-    fn neg(self) -> Self;
-    fn abs(self) -> Self;
-}
-
-macro_rules! signed_signed_operations {
-    ($type:ty) => {
-        impl SignedOperations for $type {
-            fn neg(self) -> Self {
-                -self
-            }
-
-            fn abs(self) -> Self {
-                self.abs()
-            }
-        }
-    };
-}
-
-macro_rules! unsigned_signed_operations {
-    ($type:ty) => {
-        impl SignedOperations for $type {
-            fn neg(self) -> Self {
-                self
-            }
-
-            fn abs(self) -> Self {
-                self
-            }
-        }
-    };
-}
-
-/**
- * Define a "generic number" type, which is what gets manipulated
- * 
- * maybe we can combine GenericNumberType and GenericNumber into one thing?
- * i mean, could be just adding unnecessary indirection
- * 
- */
-pub trait GenericNumberType: fmt::Debug + Clone + Copy + Eq + PartialEq + cmp::Ord +
-    convert::From<bool> + SignedOperations +
+pub trait GenericNumber: fmt::Debug + Clone + Copy + Eq + PartialEq + cmp::Ord +
+    convert::From<bool> + std::marker::Sized +
     ops::Add<Output=Self> + ops::Sub<Output=Self> + ops::Mul<Output=Self> + ops::Div<Output=Self> + ops::Rem<Output=Self> + 
     ops::Shl<Output=Self> + ops::Shr<Output=Self> + ops::BitAnd<Output=Self> + ops::BitOr<Output=Self> {
+    type AsNumberType;
+
     fn as_one() -> Self;
     fn as_zero() -> Self;
-}
 
-macro_rules! generic_number_type {
-    ($type:ty) => {
-        impl GenericNumberType for $type {
-            fn as_one() -> Self { 1 as $type }
-            fn as_zero() -> Self { 0 as $type }
-        }
-    };
-}
-   
-pub trait GenericNumber: std::marker::Sized {
-    type NumberType: GenericNumberType;
-    fn from_raw_number(number: Self::NumberType) -> Self;
-    fn raw_number(self) -> Self::NumberType;
+    /*
+     * There are some numeric operations, negate and absolute value, that can by default only be performed on 
+     * signed numbers.  Create a trait such that signed numbers can perform these operations, while unsigned
+     * numbers will simply return unchanged.
+     */
+    fn neg(self) -> Self;
+    fn abs(self) -> Self;
+
     fn push_to_stack(self, stack: &mut memory::Stack);
     fn pop_from_stack(stack: &mut memory::Stack) -> Option<Self>;
     fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address);
     fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self;
 }
 
-pub trait SignedGenericNumberType: GenericNumberType {
-    
-}
-
 pub trait SignedGenericNumber: GenericNumber {
-    type NumberType: GenericNumberType;
-    type UnsignedNumberType: GenericNumberType;
+    type NumberType;
+    type UnsignedNumberType;
     fn to_unsigned(self) -> Self::UnsignedNumberType;
 }
 
 macro_rules! generic_number {
     ($name:ident, $type:ty, $unsigned_name:ident, $unsigned_type:ty) => {
-        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-        pub struct $name(pub $type);
-        signed_signed_operations!($type);
-        generic_number_type!($type);
+        pub type $name = $type;
+        impl GenericNumber for $type {
+            type AsNumberType = $type;
 
-        impl GenericNumber for $name {
-            type NumberType = $type;
+            fn as_one() -> Self { 1 as $type }
+            fn as_zero() -> Self { 0 as $type }
 
-            fn from_raw_number(number: Self::NumberType) -> Self { Self(number) }
-            fn raw_number(self) -> Self::NumberType { self.0 }
+            fn neg(self) -> Self { -self }
+            fn abs(self) -> Self { (self as $type).abs() }
         
             fn push_to_stack(self, stack: &mut memory::Stack) {
                 stack.push_number_by_type(self);
@@ -131,31 +81,31 @@ macro_rules! generic_number {
             }
         }
 
-        pub struct $unsigned_name(pub $unsigned_type);
-        unsigned_signed_operations!($unsigned_type);
-        generic_number_type!($unsigned_type);
-
+        pub type $unsigned_name = $unsigned_type;
         impl GenericNumber for $unsigned_name {
-            type NumberType = $unsigned_type;
+            type AsNumberType = $unsigned_type;
 
-            fn from_raw_number(number: Self::NumberType) -> Self { Self(number) }
-            fn raw_number(self) -> Self::NumberType { self.0 }
+            fn as_one() -> Self { 1 as $unsigned_type }
+            fn as_zero() -> Self { 0 as $unsigned_type }
+
+            fn neg(self) -> Self { self }
+            fn abs(self) -> Self { self }
 
             fn push_to_stack(self, stack: &mut memory::Stack) {
-                stack.push_number_by_type($name(self.0 as $type));
+                stack.push_number_by_type(self as $name);
             }
 
             fn pop_from_stack(stack: &mut memory::Stack) -> Option<Self> {
-                stack.pop_number_by_type().map(|number: $name| Self(number.0 as $unsigned_type))
+                stack.pop_number_by_type().map(|number: $name| number as $unsigned_type)
             }
 
             fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
-                memory.write_number_by_type(address, $name(self.0 as $type))
+                memory.write_number_by_type(address, self as $name)
             }
 
             fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self {
                 let number: $name = memory.read_number_by_type(address);
-                Self(number.0 as $unsigned_type)
+                number as $unsigned_type
             }
         }
 
@@ -164,7 +114,7 @@ macro_rules! generic_number {
             type UnsignedNumberType = $unsigned_type;
 
             fn to_unsigned(self) -> Self::UnsignedNumberType {
-                self.0 as $unsigned_type
+                self as $unsigned_type
             }
         }
     };
@@ -174,9 +124,13 @@ generic_number!(Byte, i8, UnsignedByte, u8);
 generic_number!(Number, i64, UnsignedNumber, u64);
 generic_number!(DoubleNumber, i128, UnsignedDoubleNumber, u128);
 
-impl Number {
-    pub fn value(self) -> memory::Value {
-        memory::Value::Number(self.0)
+pub trait AsValue {
+    fn to_value(self) -> memory::Value;
+}
+
+impl AsValue for Number {
+    fn to_value(self) -> memory::Value {
+        memory::Value::Number(self)
     }
 }
 
@@ -195,15 +149,15 @@ macro_rules! convert_operations {
     ($small:ident, $large:ident) => {
         impl ConvertOperations<$small> for $large {
             fn from_chunks(chunks: &[$small]) -> $large {
-                $large(chunks.iter().cloned()
+                chunks.iter().cloned()
                     // convert to unsigned type to avoid sign extension
-                    .map(|chunk| chunk.0 as <$small as SignedGenericNumber>::UnsignedNumberType)
+                    .map(|chunk| chunk as <$small as SignedGenericNumber>::UnsignedNumberType)
                     // map each chunk to an index
                     .enumerate()
                     // convert each chunk to a large sized number, and shift it to the proper spot
-                    .map(|(i, chunk)| (chunk as <$large as SignedGenericNumber>::NumberType) << (i * mem::size_of::<<$small as GenericNumber>::NumberType>() * 8))
+                    .map(|(i, chunk)| (chunk as <$large as SignedGenericNumber>::NumberType) << (i * mem::size_of::<<$small as GenericNumber>::AsNumberType>() * 8))
                     // combine all of the now large chunks by bitwise or-ing them together
-                    .fold(0, |acc, i| acc | i))
+                    .fold(0, |acc, i| acc | i)
             }
 
             fn from_chunk(chunk: $small) -> $large {
@@ -212,11 +166,11 @@ macro_rules! convert_operations {
         
             fn to_chunks(self) -> Vec<$small> {
                 // get the sizes of the two types of numbers
-                let sizeof_small = mem::size_of::<<$small as GenericNumber>::NumberType>();
-                let sizeof_large = mem::size_of::<<$large as GenericNumber>::NumberType>();
+                let sizeof_small = mem::size_of::<<$small as GenericNumber>::AsNumberType>();
+                let sizeof_large = mem::size_of::<<$large as GenericNumber>::AsNumberType>();
                 // get a bitmask for the smaller chunk
-                let small_mask: <$small as GenericNumber>::NumberType = 0 - 1;
-                (0..(sizeof_large / sizeof_small)).map(|i| small_mask & (self.0 >> (i * sizeof_small * 8)) as <$small as GenericNumber>::NumberType).map(|x| $small(x)).collect()
+                let small_mask: <$small as GenericNumber>::AsNumberType = 0 - 1;
+                (0..(sizeof_large / sizeof_small)).map(|i| small_mask & (self >> (i * sizeof_small * 8)) as <$small as GenericNumber>::AsNumberType).collect()
             }
         }
     }

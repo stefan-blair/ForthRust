@@ -1,13 +1,13 @@
 use super::memory;
 use super::generic_numbers;
-use super::generic_numbers::{GenericNumber, GenericNumberType, SignedGenericNumber, SignedGenericNumberType};
+use super::generic_numbers::{GenericNumber, SignedGenericNumber};
 use super::evaluate;
 use super::tokens;
 
 
 macro_rules! maybe {
     ($v:expr) => {
-        |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number().raw_number()) {
+        |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number()) {
             Some(x) if x > 0 => $v(state),
             Some(_) => Result::Ok(evaluate::ControlFlowState::Continue),
             None => Result::Err(evaluate::Error::StackUnderflow),
@@ -110,7 +110,7 @@ macro_rules! postpone {
 mod arithmetic_operations {
     use std::cmp;
     use super::*;
-    use generic_numbers::{ConvertOperations, SignedOperations};
+    use generic_numbers::{ConvertOperations};
 
     use glue::Glue;
     use helper_functions::{mono_operation, binary_operation, tertiary_operation};
@@ -147,7 +147,7 @@ mod arithmetic_operations {
         }
 
         create_glue!(SingleToDoubleGlue, generic_numbers::Number, generic_numbers::DoubleNumber, |input| generic_numbers::DoubleNumber::from_chunk(input));
-        create_glue!(UnsignedSingleToDoubleGlue, generic_numbers::Number, generic_numbers::UnsignedDoubleNumber, |input| generic_numbers::UnsignedDoubleNumber::from_raw_number(generic_numbers::DoubleNumber::from_chunk(input).to_unsigned()));
+        create_glue!(UnsignedSingleToDoubleGlue, generic_numbers::Number, generic_numbers::UnsignedDoubleNumber, |input| generic_numbers::DoubleNumber::from_chunk(input).to_unsigned());
     }
 
     /**
@@ -176,11 +176,11 @@ mod arithmetic_operations {
         fn operation_args<G: Glue>(
             stack: &mut memory::Stack,
             arg_count: usize
-        ) -> Result<Vec<<G::Output as GenericNumber>::NumberType>, evaluate::Error> {
-            let mut args: Vec<<G::Output as GenericNumber>::NumberType> = Vec::new();
+        ) -> Result<Vec<G::Output>, evaluate::Error> {
+            let mut args: Vec<G::Output> = Vec::new();
             for _ in 0..arg_count {
                 match stack.pop_number::<<G as Glue>::Input>() {
-                    Some(number) => args.push(G::glue(number).raw_number()),
+                    Some(number) => args.push(G::glue(number)),
                     None => return Result::Err(evaluate::Error::StackUnderflow)
                 }
             }
@@ -189,25 +189,25 @@ mod arithmetic_operations {
 
         fn operation_result_handler<N: GenericNumber>(
             stack: &mut memory::Stack,
-            result: Result<N::NumberType, evaluate::Error>
+            result: Result<N, evaluate::Error>
         ) -> evaluate::CodeResult {
-            result.map(|x| stack.push_number(N::from_raw_number(x))).map(|_| evaluate::ControlFlowState::Continue)
+            result.map(|x| stack.push_number(x)).map(|_| evaluate::ControlFlowState::Continue)
         }
 
         pub fn tertiary_operation<G: Glue>(
             stack: &mut memory::Stack,
-            f: fn(<G::Output as GenericNumber>::NumberType, <G::Output as GenericNumber>::NumberType, <G::Output as GenericNumber>::NumberType) -> Result<<G::Output as GenericNumber>::NumberType, evaluate::Error>
+            f: fn(G::Output, G::Output, G::Output) -> Result<G::Output, evaluate::Error>
         ) -> evaluate::CodeResult {
             operation_args::<G>(stack, 3).map(|args| dispatcher!(3, f, args)).and_then(|result| operation_result_handler::<<G as Glue>::Output>(stack, result))
         }
             
-        pub fn mono_operation<G: Glue>(stack: &mut memory::Stack, f: fn(<G::Output as GenericNumber>::NumberType) -> <G::Output as GenericNumber>::NumberType) -> evaluate::CodeResult {
+        pub fn mono_operation<G: Glue>(stack: &mut memory::Stack, f: fn(G::Output) -> G::Output) -> evaluate::CodeResult {
             operation_args::<G>(stack, 1).map(|args| dispatcher!(1, f, args)).and_then(|result| operation_result_handler::<<G as Glue>::Output>(stack, Result::Ok(result)))
         }
 
         pub fn binary_operation<G: Glue>(
             stack: &mut memory::Stack,
-            f: fn(<G::Output as GenericNumber>::NumberType, <G::Output as GenericNumber>::NumberType) -> Result<<G::Output as GenericNumber>::NumberType, evaluate::Error>,
+            f: fn(G::Output, G::Output) -> Result<G::Output, evaluate::Error>,
         ) -> evaluate::CodeResult {
             operation_args::<G>(stack, 2).map(|args| dispatcher!(2, f, args)).and_then(|result| operation_result_handler::<<G as Glue>::Output>(stack, result))
         }
@@ -217,7 +217,7 @@ mod arithmetic_operations {
     pub fn add<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a + b)) }
     pub fn sub<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b - a)) }
     pub fn multiply<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a * b)) }
-    pub fn divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| if a == <G::Output as GenericNumber>::NumberType::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok(b / a) }) }
+    pub fn divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| if a == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok(b / a) }) }
     pub fn modulo<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b % a)) }
     pub fn min<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(cmp::min(a, b))) }
     pub fn max<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(cmp::max(a, b))) }
@@ -225,22 +225,22 @@ mod arithmetic_operations {
     pub fn negate<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a.neg()) }
     pub fn abs<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a.abs()) }
     // // tertiary operators
-    pub fn multiply_divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { tertiary_operation::<G>(&mut state.stack, |a, b, c| if c == <G::Output as GenericNumber>::NumberType::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok((a * b) / c)}) }
+    pub fn multiply_divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { tertiary_operation::<G>(&mut state.stack, |a, b, c| if c == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok((a * b) / c)}) }
     // // boolean operators
-    pub fn equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(<G::Output as GenericNumber>::NumberType::from(a == b))) }
-    pub fn not_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(<G::Output as GenericNumber>::NumberType::from(a != b))) }
-    pub fn less_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(<G::Output as GenericNumber>::NumberType::from(b < a))) }
-    pub fn greater_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(<G::Output as GenericNumber>::NumberType::from(b > a))) }
-    pub fn less_than_or_equal<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(<G::Output as GenericNumber>::NumberType::from(b <= a))) }
-    pub fn greater_than_or_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(<G::Output as GenericNumber>::NumberType::from(b >= a))) }
-    pub fn equals_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| <G::Output as GenericNumber>::NumberType::from(a == <G::Output as GenericNumber>::NumberType::as_zero())) }
-    pub fn less_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| <G::Output as GenericNumber>::NumberType::from(a < <G::Output as GenericNumber>::NumberType::as_zero())) }
-    pub fn greater_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| <G::Output as GenericNumber>::NumberType::from(a > <G::Output as GenericNumber>::NumberType::as_zero())) }
+    pub fn equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a == b))) }
+    pub fn not_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a != b))) }
+    pub fn less_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b < a))) }
+    pub fn greater_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b > a))) }
+    pub fn less_than_or_equal<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b <= a))) }
+    pub fn greater_than_or_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b >= a))) }
+    pub fn equals_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a == G::Output::as_zero())) }
+    pub fn less_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a < G::Output::as_zero())) }
+    pub fn greater_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a > G::Output::as_zero())) }
     // bitwise operations
     pub fn bitwise_and<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b & a)) }
     pub fn bitwise_or<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b | a)) }
-    pub fn leftshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a << <G::Output as GenericNumber>::NumberType::as_one()) }
-    pub fn rightshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a >> <G::Output as GenericNumber>::NumberType::as_one()) }
+    pub fn leftshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a << G::Output::as_one()) }
+    pub fn rightshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a >> G::Output::as_one()) }
 
     // all
     macro_rules! overflowable_operations {
@@ -777,7 +777,7 @@ mod print_operations {
     use super::*;
 
     pub fn pop_and_print<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        continue_command!(state.output_stream.write(&format!("{:?} ", pop_or_underflow!(state.stack, N).raw_number())))
+        continue_command!(state.output_stream.write(&format!("{:?} ", pop_or_underflow!(state.stack, N))))
     }
 
     pub fn print_newline(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
