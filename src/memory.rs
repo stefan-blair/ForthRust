@@ -6,41 +6,7 @@ use super::generic_numbers::{ConvertOperations, AsValue};
 
 pub type ValueSize = u64;
 pub type Offset = usize;
-pub type NumberType = i64;
 
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Address(Offset);
-
-impl Address {
-    pub fn to_offset(self) -> Offset {
-        self.0
-    }
-
-    pub fn get_cell(self) -> Offset {
-        self.0 / mem::size_of::<ValueSize>()
-    }
-
-    pub fn get_cell_byte(self) -> Offset {
-        self.0 % mem::size_of::<ValueSize>()
-    }
-
-    pub fn with_offset(self, offset: Offset) -> Self {
-        Address(offset)
-    }
-
-    pub fn increment_cell(&mut self) {
-        self.0 += mem::size_of::<ValueSize>();
-    }
-
-    pub fn plus_cell(self, i: Offset) -> Self {
-        Address(self.0 + (i * mem::size_of::<ValueSize>()))
-    }
-
-    pub fn value(self) -> Value {
-        Value::Address(self)
-    }
-}
 
 #[derive(Copy, Clone, Debug)]
 pub struct NameTag(pub Offset);
@@ -55,7 +21,7 @@ impl NameTag {
 pub enum ExecutionToken {
     Operation(operations::Operation),
     DefinedOperation(Offset),
-    Number(NumberType),
+    Number(generic_numbers::Number),
 }
 
 impl ExecutionToken {
@@ -74,17 +40,15 @@ impl ExecutionToken {
 
 #[derive(Copy, Clone)]
 pub enum Value {
-    Number(NumberType),
-    Address(Address),
+    Number(generic_numbers::Number),
     ExecutionToken(ExecutionToken),
 }
 
 impl Value {
-    pub fn to_raw_number(self) -> NumberType {
+    pub fn to_raw_number(self) -> generic_numbers::Number {
         match self {
             Self::Number(i) => i,
-            Self::Address(address) => address.to_offset() as NumberType,
-            Self::ExecutionToken(execution_token) => execution_token.to_offset() as NumberType
+            Self::ExecutionToken(execution_token) => execution_token.to_offset() as generic_numbers::Number
         }
     }
 
@@ -128,7 +92,7 @@ impl Stack {
 
 impl generic_numbers::StackOperations<generic_numbers::Byte> for Stack {
     fn push_number_by_type(&mut self, byte: generic_numbers::Byte) {
-        self.0.push(generic_numbers::Number::from_chunks(&[byte]).to_value())
+        self.0.push(generic_numbers::Number::from_chunks(&[byte]).value())
     }
 
     fn pop_number_by_type(&mut self) -> Option<generic_numbers::Byte> {
@@ -138,7 +102,7 @@ impl generic_numbers::StackOperations<generic_numbers::Byte> for Stack {
 
 impl generic_numbers::StackOperations<generic_numbers::Number> for Stack {
     fn push_number_by_type(&mut self, number: generic_numbers::Number) {
-        self.0.push(number.to_value())
+        self.0.push(number.value())
     }
 
     fn pop_number_by_type(&mut self) -> Option<generic_numbers::Number> {
@@ -148,7 +112,7 @@ impl generic_numbers::StackOperations<generic_numbers::Number> for Stack {
 
 impl generic_numbers::StackOperations<generic_numbers::DoubleNumber> for Stack {
     fn push_number_by_type(&mut self, double_number: generic_numbers::DoubleNumber) {
-        double_number.to_chunks().iter().for_each(|c| self.0.push(c.to_value()))
+        double_number.to_chunks().iter().for_each(|c| self.0.push(c.value()))
     }
 
     fn pop_number_by_type(&mut self) -> Option<generic_numbers::DoubleNumber> {
@@ -159,27 +123,63 @@ impl generic_numbers::StackOperations<generic_numbers::DoubleNumber> for Stack {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Address(Offset);
+
+impl Address {
+    pub fn get_cell(self) -> Offset {
+        self.0 / mem::size_of::<ValueSize>()
+    }
+
+    pub fn get_cell_byte(self) -> Offset {
+        self.0 % mem::size_of::<ValueSize>()
+    }
+
+    pub fn increment_cell(&mut self) {
+        self.0 += mem::size_of::<ValueSize>();
+    }
+
+    pub fn plus_cell(self, i: Offset) -> Self {
+        Address(self.0 + (i * mem::size_of::<ValueSize>()))
+    }
+
+    pub fn to_number(self) -> generic_numbers::Number {
+        self.0 as generic_numbers::Number
+    }
+}
+
 pub struct Memory(Vec<Value>);
 
 impl Memory {
     pub fn new() -> Self {
-        Memory(Vec::new())
+        Memory(vec![0.value()])
+    }
+
+    pub fn address_from(&self, number: generic_numbers::Number) -> Option<Address> {
+        let possible_address = number as Offset;
+        if possible_address / mem::size_of::<ValueSize>() < self.0.len() {
+            Some(Address(possible_address))
+        } else {
+            None
+        }
     }
 
     pub fn top(&self) -> Address {
-        Address(self.0.len() * mem::size_of::<ValueSize>())
+        Address((self.0.len() - 1) * mem::size_of::<ValueSize>())
     }
 
     pub fn expand(&mut self, amount: Offset) {
-        self.0.resize(self.0.len() + amount, 0.to_value())
+        self.0.resize(self.0.len() + amount, 0.value())
     }
 
     pub fn push_none(&mut self) {
-        self.0.push(0.to_value());
+        self.0.push(0.value());
     }
 
     pub fn push(&mut self, value: Value) {
+        self.0.pop();
         self.0.push(value);
+        self.0.push(0.value());
     }
 
     pub fn read(&self, address: Address) -> Value {
@@ -196,7 +196,7 @@ impl Memory {
 
     pub fn read_number<T: generic_numbers::GenericNumber>(&mut self, address: Address) -> T {
         T::read_from_memory(self, address)
-    }    
+    }
 }
 
 impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {
@@ -207,7 +207,7 @@ impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {
     fn write_number_by_type(&mut self, address: Address, number: generic_numbers::Byte) {
         let mut bytes = self.0[address.get_cell()].to_number().to_chunks();
         bytes[address.get_cell_byte()] = number;
-        self.0[address.get_cell()] = generic_numbers::Number::from_chunks(&bytes).to_value();
+        self.0[address.get_cell()] = generic_numbers::Number::from_chunks(&bytes).value();
     }
 }
 
@@ -217,7 +217,7 @@ impl generic_numbers::MemoryOperations<generic_numbers::Number> for Memory {
     }
 
     fn write_number_by_type(&mut self, address: Address, number: generic_numbers::Number) {
-        self.0[address.get_cell()] = number.to_value();
+        self.0[address.get_cell()] = number.value();
     }
 }
 
@@ -229,7 +229,7 @@ impl generic_numbers::MemoryOperations<generic_numbers::DoubleNumber> for Memory
 
     fn write_number_by_type(&mut self, mut address: Address, number: generic_numbers::DoubleNumber) {
         for chunk in number.to_chunks() {
-            self.0[address.get_cell()] = chunk.to_value();
+            self.0[address.get_cell()] = chunk.value();
             address.increment_cell();
         }
     }

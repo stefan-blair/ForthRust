@@ -1,6 +1,6 @@
 use super::memory;
 use super::generic_numbers;
-use super::generic_numbers::{GenericNumber, SignedGenericNumber};
+use super::generic_numbers::{GenericNumber, SignedGenericNumber, AsValue};
 use super::evaluate;
 use super::tokens;
 
@@ -79,8 +79,8 @@ macro_rules! hard_match_number {
 }
 
 macro_rules! hard_match_address {
-    ($obj:expr) => {
-        match_or_error!($obj, memory::Value::Address(address), address, evaluate::Error::InvalidAddress)
+    ($memory:expr, $obj:expr) => {
+        match_or_error!($memory.address_from(hard_match_number!($obj)), Some(address), address, evaluate::Error::InvalidAddress)
     }
 }
 
@@ -326,12 +326,12 @@ mod memory_operations {
     use super::*;
 
     pub fn dereference(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let address = hard_match_address!(pop_or_underflow!(state.stack));
+        let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         continue_command!(state.stack.push(state.memory.read(address)))
     }
     
     pub fn memory_write(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let (address, value) = (hard_match_address!(pop_or_underflow!(state.stack)), pop_or_underflow!(state.stack));
+        let (address, value) = (hard_match_address!(state.memory, pop_or_underflow!(state.stack)), pop_or_underflow!(state.stack));
         continue_command!(state.memory.write(address, value))
     }
 
@@ -340,7 +340,7 @@ mod memory_operations {
     }
 
     pub fn number_dereference<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let address = hard_match_address!(pop_or_underflow!(state.stack));
+        let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         continue_command!(state.stack.push_number::<N>(state.memory.read_number::<N>(address)))        
     }
 
@@ -349,7 +349,7 @@ mod memory_operations {
             Some(x) => x,
             None => return Result::Err(evaluate::Error::StackUnderflow)
         };
-        let address = hard_match_address!(pop_or_underflow!(state.stack));
+        let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         continue_command!(state.memory.write_number::<N>(address, number))
     }
         
@@ -447,11 +447,9 @@ mod stack_operations {
 }
 
 mod data_operations {
-    use super::evaluate;
-    use super::memory;
-    use super::tokens;
+    use super::*;
 
-    pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.stack.push(state.memory.top().value())) }
+    pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.stack.push(state.memory.top().to_number().value())) }
     pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.memory.expand(hard_match_number!(pop_or_underflow!(state.stack)) as memory::Offset)) }
 
     pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -462,7 +460,7 @@ mod data_operations {
     
         let address = state.memory.top();
         state.memory.push_none();
-        let xt = state.compiled_code.add_compiled_code(Box::new(move |state| continue_command!(state.stack.push(address.value()))));
+        let xt = state.compiled_code.add_compiled_code(Box::new(move |state| continue_command!(state.stack.push(address.to_number().value()))));
         state.definitions.add(name, evaluate::Definition::new(xt, false));
     
         Result::Ok(evaluate::ControlFlowState::Continue)
@@ -518,14 +516,13 @@ mod data_operations {
 }
 
 mod control_flow_operations {
-    use super::evaluate;
-    use super::memory;
+    use super::*;
 
     pub fn control_flow_break(_: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { Result::Ok(evaluate::ControlFlowState::Break) }
 
     pub fn do_init_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         postpone!(state, super::stack_operations::twice_stack_to_return_stack);
-        state.stack.push(state.memory.top().value());
+        state.stack.push(state.memory.top().to_number().value());
         state.return_stack.push(memory::Value::Number(0));
         Result::Ok(evaluate::ControlFlowState::Continue)
     }
@@ -539,7 +536,7 @@ mod control_flow_operations {
 
         let new_start = start + step;
         // we use a "branch false" instruction, so we want to check for falsehood
-        state.stack.push(memory::Value::Number((new_start >= end) as memory::NumberType));
+        state.stack.push(memory::Value::Number((new_start >= end) as generic_numbers::Number));
         state.return_stack.push(memory::Value::Number(new_start));
         state.return_stack.push(memory::Value::Number(end));
         Result::Ok(evaluate::ControlFlowState::Continue)
@@ -549,7 +546,7 @@ mod control_flow_operations {
         postpone!(state, loop_runtime);
 
         // get the address of the top of the loop, and patch the conditional branch at the end of the loop
-        let loop_address = hard_match_address!(pop_or_underflow!(state.stack));
+        let loop_address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(loop_address)).value();
         state.memory.push(branch_xt);
 
@@ -568,13 +565,13 @@ mod control_flow_operations {
     }
 
     pub fn begin_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        state.stack.push(state.memory.top().value());
+        state.stack.push(state.memory.top().to_number().value());
         state.return_stack.push(memory::Value::Number(0));
         Result::Ok(evaluate::ControlFlowState::Continue)
     }
 
     pub fn until_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let loop_address = hard_match_address!(pop_or_underflow!(state.stack));
+        let loop_address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(loop_address)).value();
         state.memory.push(branch_xt);
 
@@ -582,7 +579,7 @@ mod control_flow_operations {
     }
 
     pub fn again_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let loop_address = hard_match_address!(pop_or_underflow!(state.stack));
+        let loop_address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(loop_address)).value();
         state.memory.push(branch_xt);
 
@@ -590,16 +587,16 @@ mod control_flow_operations {
     }
 
     pub fn while_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        state.stack.push(state.memory.top().value());
+        state.stack.push(state.memory.top().to_number().value());
         state.memory.push_none();
         Result::Ok(evaluate::ControlFlowState::Continue)
     }
 
     pub fn repeat_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let branch_address = hard_match_address!(pop_or_underflow!(state.stack));
+        let branch_address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
 
         // add a branch instruction to the beginning of the loop unconditionally
-        let loop_address = hard_match_address!(pop_or_underflow!(state.stack));
+        let loop_address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(loop_address)).value();
         state.memory.push(branch_xt);
 
@@ -617,7 +614,7 @@ mod control_flow_operations {
             let leave_branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(state.memory.top())).value();
 
             for _ in 0..leave_address_count {
-                let leave_address = hard_match_address!(pop_or_underflow!(state.return_stack));
+                let leave_address = hard_match_address!(state.memory, pop_or_underflow!(state.return_stack));
                 state.memory.write(leave_address, leave_branch_xt);
             }
         }
@@ -626,7 +623,7 @@ mod control_flow_operations {
 
     pub fn leave(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let leave_address_count = hard_match_number!(pop_or_underflow!(state.return_stack)) + 1;
-        state.return_stack.push(state.memory.top().value());
+        state.return_stack.push(state.memory.top().to_number().value());
         state.return_stack.push(memory::Value::Number(leave_address_count));
         state.memory.push_none();
         Result::Ok(evaluate::ControlFlowState::Continue)
@@ -740,14 +737,14 @@ mod compiler_control_operations {
      * Pushes the execution token of this branch instruction onto the stack.
      */
     pub fn push_branch_false_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let address = hard_match_address!(pop_or_underflow!(state.stack));
+        let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(address));
         state.stack.push(xt.value());
         Result::Ok(evaluate::ControlFlowState::Continue)            
     }
 
     pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        let address = hard_match_address!(pop_or_underflow!(state.stack));
+        let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(address));
         state.stack.push(xt.value());
         Result::Ok(evaluate::ControlFlowState::Continue)            
@@ -819,7 +816,6 @@ mod code_compiler_helpers {
 
 // built in operators; name, whether its immediate or not, and the function to execute
 pub type Operation = fn(&mut evaluate::ForthEvaluator) -> evaluate::CodeResult;
-pub type OperationTable<'a> = &'a[(&'a str, bool, Operation)];
 
 pub fn get_operations() -> Vec<(&'static str, bool, Operation)> {
     vec![
@@ -846,9 +842,3 @@ pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     // get current index of do ... loop
     ": I R> R@ SWAP >R ;"
 ];
-
-/*
- * TODO
- * move the LEAVE array onto the return stack
- * implement other loops
- */

@@ -1,6 +1,5 @@
-use forth::{Error, Forth, NumberType};
+use forth::{Error, Forth, Number};
 
-type Number = NumberType;
 
 #[test]
 fn no_input_no_stack() {
@@ -372,7 +371,7 @@ fn create_test() {
     let mut f = Forth::new();
     assert!(f.eval(": test CREATE dup dup 1 ;").is_ok());
     assert!(f.eval("2 test whatever 2 whatever ! whatever whatever @").is_ok());
-    assert_eq!(vec![2, 2, 2, 1, 2], f.stack_numbers());
+    assert_eq!(vec![2, 2, 2, 1, 232, 2], f.stack_numbers());
 }
 
 #[test]
@@ -380,7 +379,7 @@ fn create_does_test() {
     let mut f = Forth::new();
     assert!(f.eval(": test CREATE dup dup 1 DOES> dup @ ;").is_ok());
     assert!(f.eval("2 test whatever whatever DROP 5 SWAP ! whatever").is_ok());
-    assert_eq!(vec![2, 2, 2, 1, 5], f.stack_numbers());
+    assert_eq!(vec![2, 2, 2, 1, 264, 5], f.stack_numbers());
 }
 
 #[test]

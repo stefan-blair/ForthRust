@@ -1,6 +1,6 @@
 use std::iter;
 
-use super::memory;
+use super::generic_numbers;
 
 pub struct TokenStream<'a> {
     iterator: Box<(dyn Iterator<Item = Token> + 'a)>,
@@ -47,7 +47,7 @@ impl<'a> TokenStream<'a> {
 
 #[derive(Debug)]
 pub enum Token {
-    Integer(memory::NumberType),
+    Integer(generic_numbers::Number),
     Name(String),
 }
 
@@ -55,7 +55,7 @@ impl Token {
     pub fn tokenize(s: &str) -> Self {
         s.to_uppercase()
             .as_str()
-            .parse::<memory::NumberType>()
+            .parse::<generic_numbers::Number>()
             .map_or_else(|_| Token::Name(s.to_uppercase()), |i| Token::Integer(i))
     }
 }

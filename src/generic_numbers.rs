@@ -141,14 +141,16 @@ generic_number!(DoubleNumber, i128, UnsignedDoubleNumber, u128);
  * Syntactic sugar for Value::Number(_).  The other value types all have similar functions.
  */
 pub trait AsValue {
-    fn to_value(self) -> memory::Value;
+    fn value(self) -> memory::Value;
 }
 
 impl AsValue for Number {
-    fn to_value(self) -> memory::Value {
+    fn value(self) -> memory::Value {
         memory::Value::Number(self)
     }
 }
+
+// TODO: implement a better system for extracting addresses from numbers
 
 /**
  * This trait defines how two numbers of different types / sizes would be converted
