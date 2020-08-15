@@ -46,6 +46,10 @@ pub trait GenericNumber: fmt::Debug + Clone + Copy + Eq + PartialEq + cmp::Ord +
     fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self;
 }
 
+/**
+ * Quick trait to outline some additional requirements on a signed number.  Unsigned numbers are implemented off
+ * of signed numbers, essentially by wrapping them and then casting the results.  This trait helps that implementation.
+ */
 pub trait SignedGenericNumber: GenericNumber {
     type NumberType;
     type UnsignedNumberType;
@@ -54,7 +58,12 @@ pub trait SignedGenericNumber: GenericNumber {
 
 macro_rules! generic_number {
     ($name:ident, $type:ty, $unsigned_name:ident, $unsigned_type:ty) => {
+        // create a type alias so that $name can be used instead, and $type can change without breaking code
         pub type $name = $type;
+
+        /**
+         * Implement the GenericNumber trait for each type the exact same way.
+         */
         impl GenericNumber for $type {
             type AsNumberType = $type;
 
@@ -81,6 +90,10 @@ macro_rules! generic_number {
             }
         }
 
+        /**
+         * Implement the GenericNumber trait for the unsigned version of the number, this time simply wrapping the 
+         * signed implementation and casting.
+         */
         pub type $unsigned_name = $unsigned_type;
         impl GenericNumber for $unsigned_name {
             type AsNumberType = $unsigned_type;
@@ -124,6 +137,9 @@ generic_number!(Byte, i8, UnsignedByte, u8);
 generic_number!(Number, i64, UnsignedNumber, u64);
 generic_number!(DoubleNumber, i128, UnsignedDoubleNumber, u128);
 
+/**
+ * Syntactic sugar for Value::Number(_).  The other value types all have similar functions.
+ */
 pub trait AsValue {
     fn to_value(self) -> memory::Value;
 }
