@@ -5,16 +5,9 @@ use super::evaluate;
 use super::tokens;
 
 
-macro_rules! maybe {
-    ($v:expr) => {
-        |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number()) {
-            Some(x) if x > 0 => $v(state),
-            Some(_) => Result::Ok(evaluate::ControlFlowState::Continue),
-            None => Result::Err(evaluate::Error::StackUnderflow),
-        }
-    };
-}
-
+/**
+ * These macros provide
+ */
 macro_rules! get_token {
     ($state:ident) => {
         match $state.input_stream.next() {
@@ -54,15 +47,6 @@ macro_rules! get_two_from_stack {
     };
 }
 
-macro_rules! continue_command {
-    ($p:expr) => { 
-        {
-            $p;
-            Result::Ok(evaluate::ControlFlowState::Continue)
-        }
-    }
-}
-
 macro_rules! match_or_error {
     ($obj:expr, $pat:pat, $suc:expr, $err:expr) => {
         match $obj {
@@ -85,6 +69,19 @@ macro_rules! hard_match_address {
 }
 
 /**
+ * Macro that wraps operations to make them into maybe versions (?), which only operate if the top of the stack is nonzero.
+ */
+macro_rules! maybe {
+    ($v:expr) => {
+        |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number()) {
+            Some(x) if x > 0 => $v(state),
+            Some(_) => CONTINUE_RESULT,
+            None => Result::Err(evaluate::Error::StackUnderflow),
+        }
+    };
+}
+
+/**
  * Macro used to generically absorb any type of comment.
  */
 macro_rules! absorb_comment {
@@ -92,7 +89,7 @@ macro_rules! absorb_comment {
         |state| {
             while let Some(tokens::Token::Name(name)) = state.input_stream.next() {
                 if name == $closing_brace {
-                    return Result::Ok(evaluate::ControlFlowState::Continue);
+                    return CONTINUE_RESULT;
                 }
             }
         
@@ -101,11 +98,17 @@ macro_rules! absorb_comment {
     };
 }
 
+/**
+ * Macro that implements POSTPONE, instead of executing the execution token, pushing it to memory,
+ * "postponing" it to be part of the current definition.
+ */
 macro_rules! postpone {
     ($state:expr, $execution_token:expr) => {
         $state.memory.push(memory::ExecutionToken::Operation($execution_token).value());
     };
 }
+
+const CONTINUE_RESULT: evaluate::CodeResult = Result::Ok(evaluate::ControlFlowState::Continue);
 
 mod arithmetic_operations {
     use std::cmp;
@@ -115,6 +118,18 @@ mod arithmetic_operations {
     use glue::Glue;
     use helper_functions::{mono_operation, binary_operation, tertiary_operation};
 
+
+
+    /**
+     * The arithmetic operations use a notion of "Glue" to achieve generic implementations.  A Glue trait
+     * must specify an Input type and an Output type.  The Input type specifies what type is popped off of
+     * the stack, as input for the operation.  For example, a DoubleNumber would pop two numbers and join
+     * them.  The Output type specifies what type this input type should be converted to and treated as 
+     * before passing it to the operation.  Additionally, a "glue" function must be specified to convert
+     * between the two types.  If Input == Output, no real implementation is necessary.
+     * For example, an operation could having Input = Number, so as to pop off a single number, but
+     * Output = DoubleNumber, to avoid overflowing the input values during the operation.
+     */
     mod glue {
         use super::*;
 
@@ -198,20 +213,29 @@ mod arithmetic_operations {
             stack: &mut memory::Stack,
             f: fn(G::Output, G::Output, G::Output) -> Result<G::Output, evaluate::Error>
         ) -> evaluate::CodeResult {
-            operation_args::<G>(stack, 3).map(|args| dispatcher!(3, f, args)).and_then(|result| operation_result_handler::<<G as Glue>::Output>(stack, result))
+            operation_args::<G>(stack, 3).map(|args| dispatcher!(3, f, args)).and_then(|result| operation_result_handler::<G::Output>(stack, result))
         }
             
         pub fn mono_operation<G: Glue>(stack: &mut memory::Stack, f: fn(G::Output) -> G::Output) -> evaluate::CodeResult {
-            operation_args::<G>(stack, 1).map(|args| dispatcher!(1, f, args)).and_then(|result| operation_result_handler::<<G as Glue>::Output>(stack, Result::Ok(result)))
+            operation_args::<G>(stack, 1).map(|args| dispatcher!(1, f, args)).and_then(|result| operation_result_handler::<G::Output>(stack, Result::Ok(result)))
         }
 
         pub fn binary_operation<G: Glue>(
             stack: &mut memory::Stack,
             f: fn(G::Output, G::Output) -> Result<G::Output, evaluate::Error>,
         ) -> evaluate::CodeResult {
-            operation_args::<G>(stack, 2).map(|args| dispatcher!(2, f, args)).and_then(|result| operation_result_handler::<<G as Glue>::Output>(stack, result))
+            operation_args::<G>(stack, 2).map(|args| dispatcher!(2, f, args)).and_then(|result| operation_result_handler::<G::Output>(stack, result))
         }
     }
+
+    /**
+     * The general pipeline of an operation, where A is the number of arguments, G is the specified Glue, O is the operation function to perform (i.e. addition):
+     * 
+     * pop A values from the stack of type G::Input -> 
+     * call G::glue to convert each argument to G::Output -> 
+     * call the operation O on the base numeric arguments ->
+     * push the output onto the stack
+     */
 
     // binary operations
     pub fn add<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a + b)) }
@@ -327,21 +351,25 @@ mod memory_operations {
 
     pub fn dereference(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
-        continue_command!(state.stack.push(state.memory.read(address)))
+        state.stack.push(state.memory.read(address));
+        CONTINUE_RESULT
     }
     
     pub fn memory_write(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let (address, value) = (hard_match_address!(state.memory, pop_or_underflow!(state.stack)), pop_or_underflow!(state.stack));
-        continue_command!(state.memory.write(address, value))
+        state.memory.write(address, value);
+        CONTINUE_RESULT
     }
 
     pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        continue_command!(state.memory.push(pop_or_underflow!(state.stack)))
+        state.memory.push(pop_or_underflow!(state.stack));
+        CONTINUE_RESULT
     }
 
     pub fn number_dereference<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
-        continue_command!(state.stack.push_number::<N>(state.memory.read_number::<N>(address)))        
+        state.stack.push_number::<N>(state.memory.read_number::<N>(address));    
+        CONTINUE_RESULT
     }
 
     pub fn number_write<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -350,7 +378,8 @@ mod memory_operations {
             None => return Result::Err(evaluate::Error::StackUnderflow)
         };
         let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
-        continue_command!(state.memory.write_number::<N>(address, number))
+        state.memory.write_number::<N>(address, number);
+        CONTINUE_RESULT
     }
         
     pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -366,10 +395,10 @@ mod memory_operations {
         state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
             let number = hard_match_number!(pop_or_underflow!(state.stack));
             state.definitions.set(nametag, evaluate::Definition::new(memory::ExecutionToken::Number(number), false));
-            Result::Ok(evaluate::ControlFlowState::Continue)
+            CONTINUE_RESULT
         })).value());
     
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     macro_rules! generic_operations {
@@ -400,34 +429,34 @@ mod stack_operations {
     use super::*;
 
     // return stack commands
-    pub fn stack_to_return_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.return_stack.push(pop_or_underflow!(state.stack))) }
+    pub fn stack_to_return_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.return_stack.push(pop_or_underflow!(state.stack)); CONTINUE_RESULT }
     pub fn twice_stack_to_return_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { stack_to_return_stack(state).and_then(|_| stack_to_return_stack(state)) }
-    pub fn return_stack_to_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.stack.push(pop_or_underflow!(state.return_stack))) }
-    pub fn copy_from_return_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.stack.push(peek_or_underflow!(state.return_stack))) }
+    pub fn return_stack_to_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.stack.push(pop_or_underflow!(state.return_stack)); CONTINUE_RESULT }
+    pub fn copy_from_return_stack(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.stack.push(peek_or_underflow!(state.return_stack)); CONTINUE_RESULT }
     
     // argument stack commands
-    pub fn dup(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.stack.push(peek_or_underflow!(state.stack))) }
-    pub fn drop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(pop_or_underflow!(state.stack)) }
-    pub fn rdrop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(pop_or_underflow!(state.return_stack)) }
+    pub fn dup(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.stack.push(peek_or_underflow!(state.stack)); CONTINUE_RESULT }
+    pub fn drop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { pop_or_underflow!(state.stack); CONTINUE_RESULT }
+    pub fn rdrop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { pop_or_underflow!(state.return_stack); CONTINUE_RESULT }
     pub fn swap(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { 
-        continue_command!(Some(get_two_from_stack!(&mut state.stack)).map(|(a, b)| { 
-            state.stack.push(a);
-            state.stack.push(b);
-        }))
+        let (a, b) = get_two_from_stack!(&mut state.stack);
+        state.stack.push(a);
+        state.stack.push(b);
+        CONTINUE_RESULT
     }
     pub fn over(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { 
-        continue_command!(Some(get_two_from_stack!(&mut state.stack)).map(|(a, b)| {
-            state.stack.push(b);
-            state.stack.push(a);
-            state.stack.push(b);
-        }))
+        let (a, b) = get_two_from_stack!(&mut state.stack);
+        state.stack.push(b);
+        state.stack.push(a);
+        state.stack.push(b);
+        CONTINUE_RESULT
     }
     pub fn rot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { 
         let (a, b, c) = (pop_or_underflow!(state.stack), pop_or_underflow!(state.stack), pop_or_underflow!(state.stack));
         state.stack.push(b);
         state.stack.push(a);
         state.stack.push(c);
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
@@ -449,8 +478,8 @@ mod stack_operations {
 mod data_operations {
     use super::*;
 
-    pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.stack.push(state.memory.top().to_number().value())) }
-    pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.memory.expand(hard_match_number!(pop_or_underflow!(state.stack)) as memory::Offset)) }
+    pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.stack.push(state.memory.top().to_number().value()); CONTINUE_RESULT }
+    pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.memory.expand(hard_match_number!(pop_or_underflow!(state.stack)) as memory::Offset); CONTINUE_RESULT }
 
     pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let name = match get_token!(state) {
@@ -460,10 +489,10 @@ mod data_operations {
     
         let address = state.memory.top();
         state.memory.push_none();
-        let xt = state.compiled_code.add_compiled_code(Box::new(move |state| continue_command!(state.stack.push(address.to_number().value()))));
+        let xt = state.compiled_code.add_compiled_code(Box::new(move |state| { state.stack.push(address.to_number().value()); CONTINUE_RESULT } ));
         state.definitions.add(name, evaluate::Definition::new(xt, false));
     
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
     
     pub fn does(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -481,7 +510,7 @@ mod data_operations {
                 state.execute(old_definition.execution_token).and_then(|_|state.execute(xt))
             }));
             state.definitions.set(state.definitions.get_most_recent(), evaluate::Definition::new(wrapped_xt, false));
-            Result::Ok(evaluate::ControlFlowState::Continue)
+            CONTINUE_RESULT
         }));
     
         state.memory.push(wrapper_xt.value());
@@ -489,7 +518,7 @@ mod data_operations {
         // add a manual break, so that normal calls to the function wont execute the rest of the code, only created objects
         postpone!(state, super::control_flow_operations::control_flow_break);
     
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
     
     pub fn value(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -501,7 +530,7 @@ mod data_operations {
         let number = hard_match_number!(pop_or_underflow!(state.stack));
     
         state.definitions.add(name, evaluate::Definition::new(memory::ExecutionToken::Number(number), false));
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
@@ -524,7 +553,7 @@ mod control_flow_operations {
         postpone!(state, super::stack_operations::twice_stack_to_return_stack);
         state.stack.push(state.memory.top().to_number().value());
         state.return_stack.push(memory::Value::Number(0));
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
     
     fn loop_runtime(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -539,7 +568,7 @@ mod control_flow_operations {
         state.stack.push(memory::Value::Number((new_start >= end) as generic_numbers::Number));
         state.return_stack.push(memory::Value::Number(new_start));
         state.return_stack.push(memory::Value::Number(end));
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
     
     pub fn loop_plus_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -567,7 +596,7 @@ mod control_flow_operations {
     pub fn begin_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         state.stack.push(state.memory.top().to_number().value());
         state.return_stack.push(memory::Value::Number(0));
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn until_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -589,7 +618,7 @@ mod control_flow_operations {
     pub fn while_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         state.stack.push(state.memory.top().to_number().value());
         state.memory.push_none();
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn repeat_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -618,7 +647,7 @@ mod control_flow_operations {
                 state.memory.write(leave_address, leave_branch_xt);
             }
         }
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn leave(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -626,7 +655,7 @@ mod control_flow_operations {
         state.return_stack.push(state.memory.top().to_number().value());
         state.return_stack.push(memory::Value::Number(leave_address_count));
         state.memory.push_none();
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
@@ -646,13 +675,11 @@ mod control_flow_operations {
 }
 
 mod compiler_control_operations {
-    use super::evaluate;
-    use super::memory;
-    use super::tokens;
+    use super::*;
 
-    pub fn immedate(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(state.definitions.make_immediate(state.definitions.get_most_recent())) }
-    pub fn set_interpret(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(*state.execution_mode = evaluate::ExecutionMode::Interpret) }
-    pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { continue_command!(*state.execution_mode = evaluate::ExecutionMode::Compile) }
+    pub fn immedate(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.definitions.make_immediate(state.definitions.get_most_recent()); CONTINUE_RESULT }
+    pub fn set_interpret(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { *state.execution_mode = evaluate::ExecutionMode::Interpret; CONTINUE_RESULT }
+    pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { *state.execution_mode = evaluate::ExecutionMode::Compile; CONTINUE_RESULT }
     
     pub fn start_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let name = match get_token!(state) {
@@ -688,18 +715,19 @@ mod compiler_control_operations {
         } else {
             state.compiled_code.add_compiled_code(Box::new(move |state| {
                 state.memory.push(definition.execution_token.value());
-                Result::Ok(evaluate::ControlFlowState::Continue)
+                CONTINUE_RESULT
             }))
         };
     
         state.memory.push(xt.value());
     
-        Result::Ok(evaluate::ControlFlowState::Continue)
+        CONTINUE_RESULT
     }
 
     pub fn literal(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(pop_or_underflow!(state.stack)));
-        continue_command!(state.memory.push(xt.value()))
+        state.memory.push(xt.value());
+        CONTINUE_RESULT
     }
 
     pub fn execute(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
@@ -740,14 +768,14 @@ mod compiler_control_operations {
         let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(address));
         state.stack.push(xt.value());
-        Result::Ok(evaluate::ControlFlowState::Continue)            
+        CONTINUE_RESULT            
     }
 
     pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
         let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(address));
         state.stack.push(xt.value());
-        Result::Ok(evaluate::ControlFlowState::Continue)            
+        CONTINUE_RESULT            
     }
 
     pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
@@ -774,11 +802,13 @@ mod print_operations {
     use super::*;
 
     pub fn pop_and_print<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        continue_command!(state.output_stream.write(&format!("{:?} ", pop_or_underflow!(state.stack, N))))
+        state.output_stream.write(&format!("{:?} ", pop_or_underflow!(state.stack, N)));
+        CONTINUE_RESULT
     }
 
     pub fn print_newline(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-        continue_command!(state.output_stream.writeln(""))
+        state.output_stream.writeln("");
+        CONTINUE_RESULT
     }
 
     pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
@@ -793,13 +823,12 @@ mod print_operations {
 }
 
 mod code_compiler_helpers {
-    use super::memory;
-    use super::evaluate;
+    use super::*;
 
     pub fn create_branch_false_instruction(destination: memory::Address) -> evaluate::CompiledCode {
         Box::new(move |state| {
             match pop_or_underflow!(state.stack) {
-                value if value.to_raw_number() > 0 => Result::Ok(evaluate::ControlFlowState::Continue),
+                value if value.to_raw_number() > 0 => CONTINUE_RESULT,
                 _ => Result::Ok(evaluate::ControlFlowState::Jump(destination)),
             }
         })
@@ -810,7 +839,10 @@ mod code_compiler_helpers {
     }
 
     pub fn push_value(value: memory::Value) -> evaluate::CompiledCode {
-        Box::new(move |state| continue_command!(state.stack.push(value)))
+        Box::new(move |state| {
+            state.stack.push(value);
+            CONTINUE_RESULT
+        })
     }
 }
 

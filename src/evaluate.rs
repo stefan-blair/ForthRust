@@ -276,6 +276,9 @@ impl ForthState {
     }
 }
 
+/**
+ * 
+ */
 pub struct ForthEvaluator<'f, 'i> {
     pub input_stream: tokens::TokenStream<'i>,
 
@@ -346,10 +349,3 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
         }
     }
 }
-
-/*
-parse, if its a compile ":" token, call the compiler.  otherwise, look up the thing in the dict and execute it
-
-make `branch` into an operator that pops two addresses off of the stack, and compiles it into a goto one or the other (the right closure)
-puts it in compiled code
-*/

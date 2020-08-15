@@ -150,8 +150,6 @@ impl AsValue for Number {
     }
 }
 
-// TODO: implement a better system for extracting addresses from numbers
-
 /**
  * This trait defines how two numbers of different types / sizes would be converted
  * between each other in chunks.  For example, convertings an array of bytes into a i64.

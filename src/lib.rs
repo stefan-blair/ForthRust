@@ -14,8 +14,6 @@ pub struct Forth {
     state: evaluate::ForthState
 }
 
-// lets add if and while statements!
-
 impl Forth {
     pub fn new() -> Self {
         Forth {
