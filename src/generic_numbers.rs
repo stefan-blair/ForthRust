@@ -4,7 +4,8 @@ use std::cmp;
 use std::fmt;
 use std::mem;
 
-use super::memory;
+use crate::memory;
+use crate::stack;
 
 /**
  * Interface for stack and memory to implement for each generic number type.
@@ -40,8 +41,8 @@ pub trait GenericNumber: fmt::Debug + Clone + Copy + Eq + PartialEq + cmp::Ord +
     fn neg(self) -> Self;
     fn abs(self) -> Self;
 
-    fn push_to_stack(self, stack: &mut memory::Stack);
-    fn pop_from_stack(stack: &mut memory::Stack) -> Option<Self>;
+    fn push_to_stack(self, stack: &mut stack::Stack);
+    fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self>;
     fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address);
     fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self;
 }
@@ -73,11 +74,11 @@ macro_rules! generic_number {
             fn neg(self) -> Self { -self }
             fn abs(self) -> Self { (self as $type).abs() }
         
-            fn push_to_stack(self, stack: &mut memory::Stack) {
+            fn push_to_stack(self, stack: &mut stack::Stack) {
                 stack.push_number_by_type(self);
             }
         
-            fn pop_from_stack(stack: &mut memory::Stack) -> Option<Self> {
+            fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
                 stack.pop_number_by_type()
             }
 
@@ -104,11 +105,11 @@ macro_rules! generic_number {
             fn neg(self) -> Self { self }
             fn abs(self) -> Self { self }
 
-            fn push_to_stack(self, stack: &mut memory::Stack) {
+            fn push_to_stack(self, stack: &mut stack::Stack) {
                 stack.push_number_by_type(self as $name);
             }
 
-            fn pop_from_stack(stack: &mut memory::Stack) -> Option<Self> {
+            fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
                 stack.pop_number_by_type().map(|number: $name| number as $unsigned_type)
             }
 

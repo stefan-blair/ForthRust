@@ -1,6 +1,7 @@
 use std::iter;
 
-use super::generic_numbers;
+use crate::generic_numbers;
+
 
 pub struct TokenStream<'a> {
     iterator: Box<(dyn Iterator<Item = Token> + 'a)>,
