@@ -4,8 +4,8 @@ use std::cmp;
 use std::fmt;
 use std::mem;
 
-use crate::memory;
-use crate::stack;
+use super::memory;
+use super::stack;
 
 /**
  * Interface for stack and memory to implement for each generic number type.

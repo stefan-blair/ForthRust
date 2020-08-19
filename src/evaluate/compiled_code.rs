@@ -1,5 +1,5 @@
 use crate::evaluate;
-use crate::memory;
+use super::definition;
 
 pub type CompiledCode = Box<dyn Fn(&mut evaluate::ForthEvaluator) -> evaluate::CodeResult>;
 
@@ -20,9 +20,9 @@ impl CompiledCodeSegment {
         self.compiled_code.append(&mut compiling_code_segment);
     }
 
-    pub fn get(&self, execution_token: memory::ExecutionToken) -> &CompiledCode {
+    pub fn get(&self, execution_token: definition::ExecutionToken) -> &CompiledCode {
         match execution_token {
-            memory::ExecutionToken::DefinedOperation(offset) => &self.compiled_code[offset],
+            definition::ExecutionToken::DefinedOperation(offset) => &self.compiled_code[offset],
             _ => panic!("attempted to execute invalid execution token")
         }
     }
@@ -45,8 +45,8 @@ impl<'a> CompilingCodeSegment<'a> {
         }
     }
 
-    pub fn add_compiled_code(&mut self, compiled_code: CompiledCode) -> memory::ExecutionToken {
+    pub fn add_compiled_code(&mut self, compiled_code: CompiledCode) -> definition::ExecutionToken {
         self.buffer.push(compiled_code);
-        memory::ExecutionToken::DefinedOperation(self.compiled_code.len() + self.buffer.len() - 1)
+        definition::ExecutionToken::DefinedOperation(self.compiled_code.len() + self.buffer.len() - 1)
     }
 }

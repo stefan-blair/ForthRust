@@ -18,8 +18,8 @@ pub fn start_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate:
         state.execute_at(address).map(|_| evaluate::ControlFlowState::Continue)
     }));
 
-    // we will edit the definition to be immediate if the IMMEDIATE keyword is found
-    state.definitions.add(name, evaluate::Definition::new(execution_token, false));
+    // the IMMEDIATE keyword will edit the definition to be immediate
+    state.definitions.add(name, evaluate::definition::Definition::new(execution_token, false));
 
     set_compile(state)
 }

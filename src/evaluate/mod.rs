@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 pub mod compiled_code;
+pub mod definition;
 
 use crate::operations;
-use crate::memory;
-use crate::stack;
-use crate::io;
+use crate::environment::{memory, stack};
+use crate::io::{tokens, output_stream};
 
 
 pub type ForthResult = Result<(), Error>;
@@ -32,85 +30,6 @@ pub enum ControlFlowState {
 
 pub type CodeResult = Result<ControlFlowState, Error>;
 
-#[derive(Copy, Clone, Debug)]
-pub struct NameTag(pub memory::Offset);
-
-impl NameTag {
-    pub fn to_offset(self) -> memory::Offset {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Definition {
-    pub immediate: bool,
-    pub execution_token: memory::ExecutionToken
-}
-
-impl Definition {
-    pub fn new(execution_token: memory::ExecutionToken, immediate: bool) -> Self {
-        Self { execution_token, immediate }
-    }
-}
-
-pub struct DefinitionSet {
-    nametag_map: HashMap<String, NameTag>,
-    most_recent: NameTag,
-    definitions: Vec<Definition>
-}
-
-impl DefinitionSet {
-    fn from_definitions(definitions: Vec<Definition>, nametag_map: HashMap<String, NameTag>) -> Self {
-        DefinitionSet {
-            nametag_map,
-            definitions,
-            most_recent: NameTag(0)
-        }
-    }
-    
-    pub fn get_from_token(&self, token: io::tokens::Token) -> Option<Definition> {
-        match token {
-            io::tokens::Token::Integer(i) => Some(Definition::new(memory::ExecutionToken::Number(i), false)),
-            io::tokens::Token::Name(name) => self.nametag_map.get(&name).map(|nametag| self.get(*nametag))
-        }
-    }
-
-    pub fn get(&self, nametag: NameTag) -> Definition {
-        self.definitions[nametag.to_offset()]
-    }
-
-    pub fn _get_from_name(&self, name: &str) -> Definition {
-        self.get(*self.nametag_map.get(name).unwrap())
-    }
-
-    pub fn get_nametag(&self, name: &str) -> Option<NameTag> {
-        self.nametag_map.get(name).map(|x| *x)
-    }
-
-    pub fn make_immediate(&mut self, nametag: NameTag) {
-        self.definitions[nametag.to_offset()].immediate = true;
-    }
-
-    pub fn add(&mut self, name: String, definition: Definition) -> NameTag {
-        let nametag = NameTag(self.definitions.len());
-        self.nametag_map.insert(name, nametag);
-        self.definitions.push(definition);
-        self.most_recent = nametag;
-
-        nametag
-    }
-
-    pub fn set(&mut self, nametag: NameTag, definition: Definition) -> NameTag {
-        self.definitions[nametag.to_offset()] = definition;
-
-        nametag
-    }
-
-    pub fn get_most_recent(&self) -> NameTag {
-        self.most_recent
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum ExecutionMode {
     Compile,
@@ -123,7 +42,7 @@ pub enum ExecutionMode {
 pub struct ForthState {
     pub compiled_code: compiled_code::CompiledCodeSegment,
 
-    pub definitions: DefinitionSet,
+    pub definitions: definition::DefinitionSet,
 
     // the return stack is not actually used as a return stack, but is still provided for other uses
     pub return_stack: stack::Stack,
@@ -132,17 +51,17 @@ pub struct ForthState {
 
     pub execution_mode: ExecutionMode,
 
-    pub output_stream: io::output_stream::OutputStream,
+    pub output_stream: output_stream::OutputStream,
 }
 
 impl ForthState {
     pub fn new() -> Self {
         let default_operations = operations::get_operations();
         let definitions = default_operations.iter().map(|(_, immediate, operation)| {
-            Definition::new(memory::ExecutionToken::Operation(*operation), *immediate)
+            definition::Definition::new(definition::ExecutionToken::Operation(*operation), *immediate)
         }).collect();
-        let nametag_map = default_operations.iter().enumerate().map(|(i, (name, _, _))| (name.to_string(), NameTag(i))).collect();
-        let definitions = DefinitionSet::from_definitions(definitions, nametag_map);
+        let nametag_map = default_operations.iter().enumerate().map(|(i, (name, _, _))| (name.to_string(), definition::NameTag(i))).collect();
+        let definitions = definition::DefinitionSet::from_definitions(definitions, nametag_map);
 
         let mut new_forth_state = Self {
             compiled_code: compiled_code::CompiledCodeSegment::new(),
@@ -154,18 +73,18 @@ impl ForthState {
 
             execution_mode: ExecutionMode::Interpret,
 
-            output_stream: io::output_stream::OutputStream::new()
+            output_stream: output_stream::OutputStream::new()
         };
 
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
-            let token_iterator = io::tokens::TokenStream::from_string(definition);
+            let token_iterator = tokens::TokenStream::from_string(definition);
             new_forth_state.evaluate(token_iterator).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
         }
 
         new_forth_state
     }
 
-    fn evaluator<'f, 'i>(&'f mut self, input_stream: io::tokens::TokenStream<'i>) -> ForthEvaluator<'f, 'i> {
+    fn evaluator<'f, 'i>(&'f mut self, input_stream: tokens::TokenStream<'i>) -> ForthEvaluator<'f, 'i> {
         ForthEvaluator {
             input_stream: input_stream,
             compiled_code: self.compiled_code.borrow(),
@@ -182,7 +101,7 @@ impl ForthState {
         }
     }
 
-    pub fn evaluate(&mut self, mut input_stream: io::tokens::TokenStream) -> ForthResult {
+    pub fn evaluate(&mut self, mut input_stream: tokens::TokenStream) -> ForthResult {
         let mut control_flow_state = ControlFlowState::Continue;
         while control_flow_state == ControlFlowState::Continue {
             let mut evaluator = self.evaluator(input_stream);
@@ -208,27 +127,26 @@ impl ForthState {
  * 
  */
 pub struct ForthEvaluator<'f, 'i> {
-    pub input_stream: io::tokens::TokenStream<'i>,
+    pub input_stream: tokens::TokenStream<'i>,
+    pub output_stream: &'f mut output_stream::OutputStream,
 
     pub compiled_code: compiled_code::CompilingCodeSegment<'f>,
 
-    pub definitions: &'f mut DefinitionSet,
+    pub definitions: &'f mut definition::DefinitionSet,
 
     pub return_stack: &'f mut stack::Stack,
     pub stack: &'f mut stack::Stack,
     pub memory: &'f mut memory::Memory,
 
     pub execution_mode: &'f mut ExecutionMode,
-
-    pub output_stream: &'f mut io::output_stream::OutputStream
 }
 
 impl<'f, 'i> ForthEvaluator<'f, 'i> {
-    pub fn execute(&mut self, execution_token: memory::ExecutionToken) -> CodeResult {
+    pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> CodeResult {
         match execution_token {
-            memory::ExecutionToken::Operation(fptr) => fptr(self),
-            memory::ExecutionToken::DefinedOperation(_) => self.compiled_code.compiled_code.get(execution_token)(self),
-            memory::ExecutionToken::Number(i) => {
+            definition::ExecutionToken::Operation(fptr) => fptr(self),
+            definition::ExecutionToken::DefinedOperation(_) => self.compiled_code.compiled_code.get(execution_token)(self),
+            definition::ExecutionToken::Number(i) => {
                 self.stack.push(memory::Value::Number(i));
                 Result::Ok(ControlFlowState::Continue)
             }
@@ -248,7 +166,7 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
         Result::Ok(())
     }
 
-    pub fn compile(&mut self, token: io::tokens::Token) -> CodeResult {
+    pub fn compile(&mut self, token: tokens::Token) -> CodeResult {
         let definition = match self.definitions.get_from_token(token) {
             Some(definition) => definition,
             None => return Result::Err(Error::UnknownWord)

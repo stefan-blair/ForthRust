@@ -1,37 +1,16 @@
 use std::mem;
 
-use super::operations;
+use crate::evaluate;
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
 
 pub type ValueSize = u64;
 pub type Offset = usize;
 
-#[derive(Clone, Copy)]
-pub enum ExecutionToken {
-    Operation(operations::Operation),
-    DefinedOperation(Offset),
-    Number(generic_numbers::Number),
-}
-
-impl ExecutionToken {
-    pub fn to_offset(self) -> Offset {
-        match self {
-            Self::Operation(_) => 0,
-            Self::DefinedOperation(i) => i,
-            Self::Number(i) => i as Offset
-        }
-    }
-
-    pub fn value(self) -> Value {
-        Value::ExecutionToken(self)
-    }
-}
-
 #[derive(Copy, Clone)]
 pub enum Value {
     Number(generic_numbers::Number),
-    ExecutionToken(ExecutionToken),
+    ExecutionToken(evaluate::definition::ExecutionToken),
 }
 
 impl Value {

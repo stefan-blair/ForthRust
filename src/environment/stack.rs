@@ -1,6 +1,6 @@
-use crate::memory;
-use crate::generic_numbers;
-use crate::generic_numbers::{ConvertOperations, AsValue};
+use super::memory;
+use super::generic_numbers;
+use super::generic_numbers::{ConvertOperations, AsValue};
 
 
 // contains stack in the vec, and offset contains the current base pointer (not used in data stack)

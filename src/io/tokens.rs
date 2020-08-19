@@ -1,6 +1,6 @@
 use std::iter;
 
-use crate::generic_numbers;
+use crate::environment::generic_numbers;
 
 
 pub struct TokenStream<'a> {

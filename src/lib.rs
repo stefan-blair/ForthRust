@@ -1,12 +1,10 @@
 mod operations;
 mod evaluate;
-mod generic_numbers;
-mod memory;
-mod stack;
+mod environment;
 mod io;
 
 pub use evaluate::Error;
-pub use generic_numbers::Number;
+pub use environment::generic_numbers::Number;
 
 use io::tokens;
 

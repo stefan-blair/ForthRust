@@ -1,8 +1,9 @@
 use std::cmp;
 
 use super::*;
-use crate::stack;
+use crate::environment::stack;
 use generic_numbers::{ConvertOperations};
+
 
 // these are submodules of this module, only used here
 use glue::Glue;

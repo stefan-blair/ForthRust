@@ -18,7 +18,7 @@ pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
     let address = state.memory.top();
     state.memory.push_none();
     let xt = state.compiled_code.add_compiled_code(Box::new(move |state| { state.stack.push(address.to_number().value()); CONTINUE_RESULT } ));
-    state.definitions.add(name, evaluate::Definition::new(xt, false));
+    state.definitions.add(name, evaluate::definition::Definition::new(xt, false));
 
     CONTINUE_RESULT
 }
@@ -37,7 +37,7 @@ pub fn does(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         let wrapped_xt = state.compiled_code.add_compiled_code(Box::new(move |state| {
             state.execute(old_definition.execution_token).and_then(|_|state.execute(xt))
         }));
-        state.definitions.set(state.definitions.get_most_recent(), evaluate::Definition::new(wrapped_xt, false));
+        state.definitions.set(state.definitions.get_most_recent(), evaluate::definition::Definition::new(wrapped_xt, false));
         CONTINUE_RESULT
     }));
 
@@ -57,7 +57,7 @@ pub fn value(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
 
     let number = hard_match_number!(pop_or_underflow!(state.stack));
 
-    state.definitions.add(name, evaluate::Definition::new(memory::ExecutionToken::Number(number), false));
+    state.definitions.add(name, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
     CONTINUE_RESULT
 }
 

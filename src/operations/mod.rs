@@ -1,17 +1,16 @@
-use crate::memory;
+use crate::environment::{memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber, generic_numbers::AsValue};
 use crate::evaluate;
 use crate::io;
-use crate::generic_numbers;
-use crate::generic_numbers::{GenericNumber, SignedGenericNumber, AsValue};
 
-pub mod arithmetic_operations;
-pub mod compiler_control_operations;
-pub mod control_flow_operations;
-pub mod data_operations;
-pub mod memory_operations;
-pub mod print_operations;
-pub mod stack_operations;
+mod arithmetic_operations;
+mod compiler_control_operations;
+mod control_flow_operations;
+mod data_operations;
+mod memory_operations;
+mod print_operations;
+mod stack_operations;
 
+// import all of the macros exposed by this module for ease of use by the other operations modules
 use crate::get_two_from_stack;
 use crate::hard_match_address;
 use crate::hard_match_number;
@@ -23,117 +22,121 @@ use crate::postpone;
 use crate::maybe;
 
 
-#[macro_export]
-macro_rules! get_token {
-    ($state:ident) => {
-        match $state.input_stream.next() {
-            Some(token) => token,
-            None => return Result::Err(evaluate::Error::InvalidWord)
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! peek_or_underflow {
-    ($stack:expr) => {
-        match $stack.peek() {
-            Some(v) => v,
-            None => return Result::Err(evaluate::Error::StackUnderflow)
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! pop_or_underflow {
-    ($stack:expr) => {
-        match $stack.pop() {
-            Some(v) => v,
-            None => return Result::Err(evaluate::Error::StackUnderflow)
-        }
-    };
-    ($stack:expr, $type:ty) => {
-        match $stack.pop_number::<$type>() {
-            Some(v) => v,
-            None => return Result::Err(evaluate::Error::StackUnderflow)
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! get_two_from_stack {
-    ($stack:expr) => {
-        (pop_or_underflow!($stack), pop_or_underflow!($stack))
-    };
-}
-
-#[macro_export]
-macro_rules! match_or_error {
-    ($obj:expr, $pat:pat, $suc:expr, $err:expr) => {
-        match $obj {
-            $pat => $suc,
-            _ => return Result::Err($err)
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! hard_match_number {
-    ($obj:expr) => {
-        match_or_error!($obj, memory::Value::Number(number), number, evaluate::Error::InvalidNumber)
-    }
-}
-
-#[macro_export]
-macro_rules! hard_match_address {
-    ($memory:expr, $obj:expr) => {
-        match_or_error!($memory.address_from(hard_match_number!($obj)), Some(address), address, evaluate::Error::InvalidAddress)
-    }
-}
-
-/**
- * Macro that wraps operations to make them into maybe versions (?), which only operate if the top of the stack is nonzero.
- */
-#[macro_export]
-macro_rules! maybe {
-    ($v:expr) => {
-        |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number()) {
-            Some(x) if x > 0 => $v(state),
-            Some(_) => CONTINUE_RESULT,
-            None => Result::Err(evaluate::Error::StackUnderflow),
-        }
-    };
-}
-
-/**
- * Macro used to generically absorb any type of comment.
- */
-#[macro_export]
-macro_rules! absorb_comment {
-    ($closing_brace:expr) => {
-        |state| {
-            while let Some(io::tokens::Token::Name(name)) = state.input_stream.next() {
-                if name == $closing_brace {
-                    return CONTINUE_RESULT;
-                }
-            }
-        
-            Result::Err(evaluate::Error::NoMoreTokens)    
-        }        
-    };
-}
-
-/**
- * Macro that implements POSTPONE, instead of executing the execution token, pushing it to memory,
- * "postponing" it to be part of the current definition.
- */
-#[macro_export]
-macro_rules! postpone {
-    ($state:expr, $execution_token:expr) => {
-        $state.memory.push(memory::ExecutionToken::Operation($execution_token).value());
-    };
-}
-
+// most operations simply return an Ok(Continue), simple shorthand to make the operations code cleaner
 const CONTINUE_RESULT: evaluate::CodeResult = Result::Ok(evaluate::ControlFlowState::Continue);
+
+// a set of macros to help simplify the operations
+mod helper_macros {
+    #[macro_export]
+    macro_rules! get_token {
+        ($state:ident) => {
+            match $state.input_stream.next() {
+                Some(token) => token,
+                None => return Result::Err(evaluate::Error::InvalidWord)
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! peek_or_underflow {
+        ($stack:expr) => {
+            match $stack.peek() {
+                Some(v) => v,
+                None => return Result::Err(evaluate::Error::StackUnderflow)
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! pop_or_underflow {
+        ($stack:expr) => {
+            match $stack.pop() {
+                Some(v) => v,
+                None => return Result::Err(evaluate::Error::StackUnderflow)
+            }
+        };
+        ($stack:expr, $type:ty) => {
+            match $stack.pop_number::<$type>() {
+                Some(v) => v,
+                None => return Result::Err(evaluate::Error::StackUnderflow)
+            }
+        }
+    }
+
+    #[macro_export]
+    macro_rules! get_two_from_stack {
+        ($stack:expr) => {
+            (pop_or_underflow!($stack), pop_or_underflow!($stack))
+        };
+    }
+
+    #[macro_export]
+    macro_rules! match_or_error {
+        ($obj:expr, $pat:pat, $suc:expr, $err:expr) => {
+            match $obj {
+                $pat => $suc,
+                _ => return Result::Err($err)
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! hard_match_number {
+        ($obj:expr) => {
+            match_or_error!($obj, memory::Value::Number(number), number, evaluate::Error::InvalidNumber)
+        }
+    }
+
+    #[macro_export]
+    macro_rules! hard_match_address {
+        ($memory:expr, $obj:expr) => {
+            match_or_error!($memory.address_from(hard_match_number!($obj)), Some(address), address, evaluate::Error::InvalidAddress)
+        }
+    }
+
+    /**
+     * Macro that wraps operations to make them into maybe versions (?), which only operate if the top of the stack is nonzero.
+     */
+    #[macro_export]
+    macro_rules! maybe {
+        ($v:expr) => {
+            |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number()) {
+                Some(x) if x > 0 => $v(state),
+                Some(_) => CONTINUE_RESULT,
+                None => Result::Err(evaluate::Error::StackUnderflow),
+            }
+        };
+    }
+
+    /**
+     * Macro used to generically absorb any type of comment.
+     */
+    #[macro_export]
+    macro_rules! absorb_comment {
+        ($closing_brace:expr) => {
+            |state| {
+                while let Some(io::tokens::Token::Name(name)) = state.input_stream.next() {
+                    if name == $closing_brace {
+                        return CONTINUE_RESULT;
+                    }
+                }
+            
+                Result::Err(evaluate::Error::NoMoreTokens)    
+            }        
+        };
+    }
+
+    /**
+     * Macro that implements POSTPONE, instead of executing the execution token, pushing it to memory,
+     * "postponing" it to be part of the current definition.
+     */
+    #[macro_export]
+    macro_rules! postpone {
+        ($state:expr, $execution_token:expr) => {
+            $state.memory.push(evaluate::definition::ExecutionToken::Operation($execution_token).value());
+        };
+    }
+}
 
 mod code_compiler_helpers {
     use super::*;
@@ -162,6 +165,10 @@ mod code_compiler_helpers {
 // built in operators; name, whether its immediate or not, and the function to execute
 pub type Operation = fn(&mut evaluate::ForthEvaluator) -> evaluate::CodeResult;
 
+/**
+ * This is the main function that this module provides.  It takes all of the operations defined in each submodule,
+ * and compiles them into one vector.  
+ */
 pub fn get_operations() -> Vec<(&'static str, bool, Operation)> {
     vec![
         arithmetic_operations::get_operations(),

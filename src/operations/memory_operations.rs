@@ -51,7 +51,7 @@ pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
 
     state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
         let number = hard_match_number!(pop_or_underflow!(state.stack));
-        state.definitions.set(nametag, evaluate::Definition::new(memory::ExecutionToken::Number(number), false));
+        state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
         CONTINUE_RESULT
     })).value());
 

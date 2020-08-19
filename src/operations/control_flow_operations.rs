@@ -42,7 +42,7 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::
 
 pub fn loop_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
     // postpone pushing 1 onto the stack, which is the expected step value on the stack (+LOOP has an explicit step)
-    state.memory.push(memory::ExecutionToken::Number(1).value());
+    state.memory.push(evaluate::definition::ExecutionToken::Number(1).value());
     loop_plus_compiletime(state)
 }
 
