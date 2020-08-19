@@ -31,6 +31,25 @@ pub fn rot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
     state.stack.push(c);
     CONTINUE_RESULT
 }
+pub fn nrot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+    let (a, b, c) = (pop_or_underflow!(state.stack), pop_or_underflow!(state.stack), pop_or_underflow!(state.stack));
+    state.stack.push(c);
+    state.stack.push(a);
+    state.stack.push(b);
+    CONTINUE_RESULT
+}
+pub fn nip(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+    let (a, _) = get_two_from_stack!(&mut state.stack);
+    state.stack.push(a);
+    CONTINUE_RESULT
+}
+pub fn tuck(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+    let (a, b) = get_two_from_stack!(&mut state.stack);
+    state.stack.push(a);
+    state.stack.push(b);
+    state.stack.push(a);
+    CONTINUE_RESULT
+}
 
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
@@ -43,6 +62,9 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("DROP", false, drop),
         ("SWAP", false, swap),
         ("OVER", false, over),
-        ("ROT", false, rot),    
+        ("ROT", false, rot),
+        ("-ROT", false, nrot),
+        ("NIP", false, nip),
+        ("TUCK", false, tuck)
     ]
 }
