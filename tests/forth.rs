@@ -465,3 +465,6 @@ fn print_size_test() {
     assert!(f.eval("-1 -1 UM+ D.").is_ok());
     assert_eq!("36893488147419103230 ", f.consume_output());    
 }
+
+// https://en.wikipedia.org/wiki/Threaded_code
+// https://www.bradrodriguez.com/papers/moving1.htm 
