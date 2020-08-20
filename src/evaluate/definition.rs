@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::environment::{memory, generic_numbers};
+use crate::environment::{memory, generic_numbers, stack, value};
 use crate::operations;
 use crate::io::tokens;
 
@@ -21,8 +21,32 @@ impl ExecutionToken {
         }
     }
 
-    pub fn value(self) -> memory::Value {
-        memory::Value::ExecutionToken(self)
+    pub fn value(self) -> value::Value {
+        value::Value::ExecutionToken(self)
+    }
+}
+
+impl value::ValueVariant for ExecutionToken {
+    fn push_to_stack(self, stack: &mut stack::Stack) {
+        stack.push(self.value())
+    }
+
+    fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
+        stack.pop().and_then(|value| match value {
+            value::Value::ExecutionToken(xt) => Some(xt),
+            _ => None
+        })
+    }
+
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
+        memory.write_value(address, self.value())
+    }
+
+    fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self {
+        match memory.read_value(address) {
+            value::Value::ExecutionToken(xt) => xt,
+            value::Value::Number(n) => ExecutionToken::Number(n)
+        }
     }
 }
 

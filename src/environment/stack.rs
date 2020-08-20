@@ -1,37 +1,41 @@
+use super::value;
 use super::memory;
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
 
 
 // contains stack in the vec, and offset contains the current base pointer (not used in data stack)
-pub struct Stack(Vec<memory::Value>, memory::Offset);
+pub struct Stack(Vec<value::Value>, memory::Offset);
 
 impl Stack {
     pub fn new() -> Self {
         Stack(Vec::new(), 0)
     }
 
-    pub fn push(&mut self, value: memory::Value) {
+    pub(super) fn push_value(&mut self, value: value::Value) {
         self.0.push(value);
     }
 
-    pub fn pop(&mut self) -> Option<memory::Value> {
+    pub(super) fn pop_value(&mut self) -> Option<value::Value> {
         self.0.pop()
     }
 
-    pub fn push_number<T: generic_numbers::GenericNumber>(&mut self, number: T) {
-        number.push_to_stack(self)
+    pub fn push<T: value::ValueVariant>(&mut self, value: T) {
+        value.push_to_stack(self);
     }
 
-    pub fn pop_number<T: generic_numbers::GenericNumber>(&mut self) -> Option<T> {
+    pub fn pop<T: value::ValueVariant>(&mut self) -> Option<T> {
         T::pop_from_stack(self)
     }
 
-    pub fn peek(&self) -> Option<memory::Value> {
-        self.0.last().map(|x| *x)
+    pub fn peek<T: value::ValueVariant>(&mut self) -> Option<T> {
+        self.pop().map(|value| {
+            self.push(value);
+            value
+        })
     }
 
-    pub fn to_vec(&self) -> Vec<memory::Value> {
+    pub fn to_vec(&self) -> Vec<value::Value> {
         self.0.clone()
     }
 }

@@ -51,16 +51,13 @@ pub fn postpone(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
 }
 
 pub fn literal(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(pop_or_underflow!(state.stack)));
+    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(pop_or_underflow!(state.stack, value::Value)));
     state.memory.push(xt.value());
     CONTINUE_RESULT
 }
 
 pub fn execute(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-    let execution_token = match pop_or_underflow!(state.stack) {
-        memory::Value::ExecutionToken(execution_token) => execution_token,
-        _ => return Result::Err(evaluate::Error::InvalidExecutionToken)
-    };
+    let execution_token = pop_or_underflow!(state.stack, evaluate::definition::ExecutionToken);
     state.execute(execution_token)
 }
 
@@ -70,7 +67,7 @@ pub fn read_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::C
         .next().ok_or(evaluate::Error::NoMoreTokens)
         .and_then(|token| state.definitions.get_from_token(token).ok_or(evaluate::Error::UnknownWord))
         .map(|definition| {
-            state.stack.push(memory::Value::ExecutionToken(definition.execution_token));
+            state.stack.push(definition.execution_token);
             evaluate::ControlFlowState::Continue
         })       
 }
@@ -91,16 +88,16 @@ pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::Co
  * Pushes the execution token of this branch instruction onto the stack.
  */
 pub fn push_branch_false_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-    let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
+    let address = pop_address!(state.memory, state.stack);
     let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(address));
-    state.stack.push(xt.value());
+    state.stack.push(xt);
     CONTINUE_RESULT            
 }
 
 pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
-    let address = hard_match_address!(state.memory, pop_or_underflow!(state.stack));
+    let address = pop_address!(state.memory, state.stack);
     let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(address));
-    state.stack.push(xt.value());
+    state.stack.push(xt);
     CONTINUE_RESULT            
 }
 

@@ -83,7 +83,7 @@ mod helper_functions {
     ) -> Result<Vec<G::Output>, evaluate::Error> {
         let mut args: Vec<G::Output> = Vec::new();
         for _ in 0..arg_count {
-            match stack.pop_number::<<G as Glue>::Input>() {
+            match stack.pop::<<G as Glue>::Input>() {
                 Some(number) => args.push(G::glue(number)),
                 None => return Result::Err(evaluate::Error::StackUnderflow)
             }
@@ -95,7 +95,7 @@ mod helper_functions {
         stack: &mut stack::Stack,
         result: Result<N, evaluate::Error>
     ) -> evaluate::CodeResult {
-        result.map(|x| stack.push_number(x)).map(|_| evaluate::ControlFlowState::Continue)
+        result.map(|x| stack.push(x)).map(|_| evaluate::ControlFlowState::Continue)
     }
 
     pub fn tertiary_operation<G: Glue>(

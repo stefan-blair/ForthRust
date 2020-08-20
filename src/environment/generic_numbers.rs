@@ -6,6 +6,7 @@ use std::mem;
 
 use super::memory;
 use super::stack;
+use super::value;
 
 /**
  * Interface for stack and memory to implement for each generic number type.
@@ -25,7 +26,7 @@ pub trait MemoryOperations<T> {
  * used for interacting with the stack and memory.
  */
 pub trait GenericNumber: fmt::Debug + Clone + Copy + Eq + PartialEq + cmp::Ord +
-    convert::From<bool> + std::marker::Sized +
+    convert::From<bool> + std::marker::Sized + value::ValueVariant + 
     ops::Add<Output=Self> + ops::Sub<Output=Self> + ops::Mul<Output=Self> + ops::Div<Output=Self> + ops::Rem<Output=Self> + 
     ops::Shl<Output=Self> + ops::Shr<Output=Self> + ops::BitAnd<Output=Self> + ops::BitOr<Output=Self> {
     type AsNumberType;
@@ -40,11 +41,6 @@ pub trait GenericNumber: fmt::Debug + Clone + Copy + Eq + PartialEq + cmp::Ord +
      */
     fn neg(self) -> Self;
     fn abs(self) -> Self;
-
-    fn push_to_stack(self, stack: &mut stack::Stack);
-    fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self>;
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address);
-    fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self;
 }
 
 /**
@@ -73,7 +69,9 @@ macro_rules! generic_number {
 
             fn neg(self) -> Self { -self }
             fn abs(self) -> Self { (self as $type).abs() }
-        
+        }
+
+        impl value::ValueVariant for $type {
             fn push_to_stack(self, stack: &mut stack::Stack) {
                 stack.push_number_by_type(self);
             }
@@ -104,7 +102,9 @@ macro_rules! generic_number {
 
             fn neg(self) -> Self { self }
             fn abs(self) -> Self { self }
+        }
 
+        impl value::ValueVariant for $unsigned_type {
             fn push_to_stack(self, stack: &mut stack::Stack) {
                 stack.push_number_by_type(self as $name);
             }
@@ -142,12 +142,12 @@ generic_number!(DoubleNumber, i128, UnsignedDoubleNumber, u128);
  * Syntactic sugar for Value::Number(_).  The other value types all have similar functions.
  */
 pub trait AsValue {
-    fn value(self) -> memory::Value;
+    fn value(self) -> value::Value;
 }
 
 impl AsValue for Number {
-    fn value(self) -> memory::Value {
-        memory::Value::Number(self)
+    fn value(self) -> value::Value {
+        value::Value::Number(self)
     }
 }
 

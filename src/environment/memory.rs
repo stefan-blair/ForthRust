@@ -1,30 +1,11 @@
 use std::mem;
 
-use crate::evaluate;
+use super::value;
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
 
 pub type ValueSize = u64;
 pub type Offset = usize;
-
-#[derive(Copy, Clone)]
-pub enum Value {
-    Number(generic_numbers::Number),
-    ExecutionToken(evaluate::definition::ExecutionToken),
-}
-
-impl Value {
-    pub fn to_raw_number(self) -> generic_numbers::Number {
-        match self {
-            Self::Number(i) => i,
-            Self::ExecutionToken(execution_token) => execution_token.to_offset() as generic_numbers::Number
-        }
-    }
-
-    pub fn to_number(self) -> generic_numbers::Number {
-        self.to_raw_number()
-    }
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Address(Offset);
@@ -51,7 +32,7 @@ impl Address {
     }
 }
 
-pub struct Memory(Vec<Value>);
+pub struct Memory(Vec<value::Value>);
 
 impl Memory {
     pub fn new() -> Self {
@@ -79,25 +60,25 @@ impl Memory {
         self.0.push(0.value());
     }
 
-    pub fn push(&mut self, value: Value) {
+    pub fn push(&mut self, value: value::Value) {
         self.0.pop();
         self.0.push(value);
         self.0.push(0.value());
     }
 
-    pub fn read(&self, address: Address) -> Value {
-        self.0[address.get_cell()]
-    }
-
-    pub fn write(&mut self, address: Address, value: Value) {
+    pub fn write_value(&mut self, address: Address, value: value::Value) {
         self.0[address.get_cell()] = value
     }
 
-    pub fn write_number<T: generic_numbers::GenericNumber>(&mut self, address: Address, number: T) {
+    pub fn read_value(&mut self, address: Address) -> value::Value {
+        self.0[address.get_cell()]
+    }
+
+    pub fn write<T: value::ValueVariant>(&mut self, address: Address, number: T) {
         number.write_to_memory(self, address)
     }
 
-    pub fn read_number<T: generic_numbers::GenericNumber>(&mut self, address: Address) -> T {
+    pub fn read<T: value::ValueVariant>(&mut self, address: Address) -> T {
         T::read_from_memory(self, address)
     }
 }
@@ -107,9 +88,9 @@ impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {
         self.0[address.get_cell()].to_number().to_chunks()[address.get_cell_byte()]
     }
 
-    fn write_number_by_type(&mut self, address: Address, number: generic_numbers::Byte) {
+    fn write_number_by_type(&mut self, address: Address, byte: generic_numbers::Byte) {
         let mut bytes = self.0[address.get_cell()].to_number().to_chunks();
-        bytes[address.get_cell_byte()] = number;
+        bytes[address.get_cell_byte()] = byte;
         self.0[address.get_cell()] = generic_numbers::Number::from_chunks(&bytes).value();
     }
 }

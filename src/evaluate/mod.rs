@@ -2,7 +2,7 @@ pub mod compiled_code;
 pub mod definition;
 
 use crate::operations;
-use crate::environment::{memory, stack};
+use crate::environment::{value, memory, stack};
 use crate::io::{tokens, output_stream};
 
 
@@ -147,14 +147,14 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
             definition::ExecutionToken::Operation(fptr) => fptr(self),
             definition::ExecutionToken::DefinedOperation(_) => self.compiled_code.compiled_code.get(execution_token)(self),
             definition::ExecutionToken::Number(i) => {
-                self.stack.push(memory::Value::Number(i));
+                self.stack.push(i);
                 Result::Ok(ControlFlowState::Continue)
             }
         }
     }
 
     pub fn execute_at(&mut self, mut address: memory::Address) -> ForthResult {
-        while let memory::Value::ExecutionToken(xt) = self.memory.read(address) {
+        while let value::Value::ExecutionToken(xt) = self.memory.read(address) {
             match self.execute(xt) {
                 Result::Ok(ControlFlowState::Continue) => address.increment_cell(),
                 Result::Ok(ControlFlowState::Break) => break,

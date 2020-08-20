@@ -1,4 +1,4 @@
-use crate::environment::{memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber, generic_numbers::AsValue};
+use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
 use crate::evaluate;
 use crate::io;
 
@@ -13,8 +13,8 @@ mod stack_operations;
 // import all of the macros exposed by this module for ease of use by the other operations modules
 use crate::get_two_from_stack;
 use crate::hard_match_address;
-use crate::hard_match_number;
 use crate::pop_or_underflow;
+use crate::pop_address;
 use crate::match_or_error;
 use crate::peek_or_underflow;
 use crate::get_token;
@@ -39,8 +39,8 @@ mod helper_macros {
 
     #[macro_export]
     macro_rules! peek_or_underflow {
-        ($stack:expr) => {
-            match $stack.peek() {
+        ($stack:expr, $type:ty) => {
+            match $stack.peek::<$type>() {
                 Some(v) => v,
                 None => return Result::Err(evaluate::Error::StackUnderflow)
             }
@@ -49,14 +49,8 @@ mod helper_macros {
 
     #[macro_export]
     macro_rules! pop_or_underflow {
-        ($stack:expr) => {
-            match $stack.pop() {
-                Some(v) => v,
-                None => return Result::Err(evaluate::Error::StackUnderflow)
-            }
-        };
         ($stack:expr, $type:ty) => {
-            match $stack.pop_number::<$type>() {
+            match $stack.pop::<$type>() {
                 Some(v) => v,
                 None => return Result::Err(evaluate::Error::StackUnderflow)
             }
@@ -64,9 +58,16 @@ mod helper_macros {
     }
 
     #[macro_export]
+    macro_rules! pop_address {
+        ($memory:expr, $stack:expr) => {
+            hard_match_address!($memory, pop_or_underflow!($stack, generic_numbers::Number))
+        };
+    }
+
+    #[macro_export]
     macro_rules! get_two_from_stack {
-        ($stack:expr) => {
-            (pop_or_underflow!($stack), pop_or_underflow!($stack))
+        ($stack:expr, $type_1:ty, $type_2:ty) => {
+            (pop_or_underflow!($stack, $type_1), pop_or_underflow!($stack, $type_2))
         };
     }
 
@@ -81,16 +82,9 @@ mod helper_macros {
     }
 
     #[macro_export]
-    macro_rules! hard_match_number {
-        ($obj:expr) => {
-            match_or_error!($obj, memory::Value::Number(number), number, evaluate::Error::InvalidNumber)
-        }
-    }
-
-    #[macro_export]
     macro_rules! hard_match_address {
         ($memory:expr, $obj:expr) => {
-            match_or_error!($memory.address_from(hard_match_number!($obj)), Some(address), address, evaluate::Error::InvalidAddress)
+            match_or_error!($memory.address_from($obj), Some(address), address, evaluate::Error::InvalidAddress)
         }
     }
 
@@ -100,7 +94,7 @@ mod helper_macros {
     #[macro_export]
     macro_rules! maybe {
         ($v:expr) => {
-            |state: &mut evaluate::ForthEvaluator| match state.stack.peek().map(|value| value.to_number()) {
+            |state: &mut evaluate::ForthEvaluator| match state.stack.peek::<value::Value>().map(|value| value.to_number()) {
                 Some(x) if x > 0 => $v(state),
                 Some(_) => CONTINUE_RESULT,
                 None => Result::Err(evaluate::Error::StackUnderflow),
@@ -143,8 +137,8 @@ mod code_compiler_helpers {
 
     pub fn create_branch_false_instruction(destination: memory::Address) -> evaluate::compiled_code::CompiledCode {
         Box::new(move |state| {
-            match pop_or_underflow!(state.stack) {
-                value if value.to_raw_number() > 0 => CONTINUE_RESULT,
+            match pop_or_underflow!(state.stack, value::Value) {
+                value if value.to_number() > 0 => CONTINUE_RESULT,
                 _ => Result::Ok(evaluate::ControlFlowState::Jump(destination)),
             }
         })
@@ -154,7 +148,7 @@ mod code_compiler_helpers {
         Box::new(move |_| Result::Ok(evaluate::ControlFlowState::Jump(destination)))
     }
 
-    pub fn push_value(value: memory::Value) -> evaluate::compiled_code::CompiledCode {
+    pub fn push_value(value: value::Value) -> evaluate::compiled_code::CompiledCode {
         Box::new(move |state| {
             state.stack.push(value);
             CONTINUE_RESULT
@@ -192,5 +186,5 @@ pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     ": ELSE POSTPONE 0 HERE 1 ALLOT SWAP HERE _BNE SWAP ! ; IMMEDIATE",
     ": THEN HERE _BNE SWAP ! ; IMMEDIATE",
     // get current index of do ... loop
-    ": I R> R@ SWAP >R ;"
+    ": I R@ ;"
 ];

@@ -20,7 +20,7 @@ impl Forth {
     }
 
     pub fn stack(&self) -> Vec<Number> {
-        self.state.stack.to_vec().iter().map(|x| x.to_raw_number()).collect::<Vec<_>>()
+        self.state.stack.to_vec().iter().map(|x| x.to_number()).collect::<Vec<_>>()
     }
 
     pub fn consume_output(&mut self) -> String {

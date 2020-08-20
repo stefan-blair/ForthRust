@@ -1,13 +1,12 @@
 use super::*;
 
-use crate::hard_match_number;
 use crate::pop_or_underflow;
 use crate::get_token;
 use crate::postpone;
 
 
-pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.stack.push(state.memory.top().to_number().value()); CONTINUE_RESULT }
-pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.memory.expand(hard_match_number!(pop_or_underflow!(state.stack)) as memory::Offset); CONTINUE_RESULT }
+pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.stack.push(state.memory.top().to_number()); CONTINUE_RESULT }
+pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { state.memory.expand(pop_or_underflow!(state.stack, generic_numbers::Number) as memory::Offset); CONTINUE_RESULT }
 
 pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
     let name = match get_token!(state) {
@@ -17,7 +16,7 @@ pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
 
     let address = state.memory.top();
     state.memory.push_none();
-    let xt = state.compiled_code.add_compiled_code(Box::new(move |state| { state.stack.push(address.to_number().value()); CONTINUE_RESULT } ));
+    let xt = state.compiled_code.add_compiled_code(Box::new(move |state| { state.stack.push(address.to_number()); CONTINUE_RESULT } ));
     state.definitions.add(name, evaluate::definition::Definition::new(xt, false));
 
     CONTINUE_RESULT
@@ -55,7 +54,7 @@ pub fn value(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
         _ => return Result::Err(evaluate::Error::InvalidWord)
     };
 
-    let number = hard_match_number!(pop_or_underflow!(state.stack));
+    let number = pop_or_underflow!(state.stack, generic_numbers::Number);
 
     state.definitions.add(name, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
     CONTINUE_RESULT
