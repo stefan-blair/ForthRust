@@ -54,7 +54,7 @@ pub trait SignedGenericNumber: GenericNumber {
 }
 
 macro_rules! generic_number {
-    ($name:ident, $type:ty, $unsigned_name:ident, $unsigned_type:ty) => {
+    ($name:ident, $type:ty) => {
         // create a type alias so that $name can be used instead, and $type can change without breaking code
         pub type $name = $type;
 
@@ -88,6 +88,10 @@ macro_rules! generic_number {
                 memory.read_number_by_type(address)
             }
         }
+    };
+
+    ($name:ident, $type:ty, $unsigned_name:ident, $unsigned_type:ty) => {
+        generic_number!($name, $type);
 
         /**
          * Implement the GenericNumber trait for the unsigned version of the number, this time simply wrapping the 

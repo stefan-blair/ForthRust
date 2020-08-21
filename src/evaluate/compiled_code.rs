@@ -1,7 +1,7 @@
 use crate::evaluate;
 use super::definition;
 
-pub type CompiledCode = Box<dyn Fn(&mut evaluate::ForthEvaluator) -> evaluate::CodeResult>;
+pub type CompiledCode = Box<dyn Fn(&mut evaluate::ForthEvaluator) -> evaluate::ForthResult>;
 
 pub struct CompiledCodeSegment {
     compiled_code: Vec<CompiledCode>,
@@ -22,7 +22,7 @@ impl CompiledCodeSegment {
 
     pub fn get(&self, execution_token: definition::ExecutionToken) -> &CompiledCode {
         match execution_token {
-            definition::ExecutionToken::DefinedOperation(offset) => &self.compiled_code[offset],
+            definition::ExecutionToken::CompiledOperation(offset) => &self.compiled_code[offset],
             _ => panic!("attempted to execute invalid execution token")
         }
     }
@@ -47,6 +47,6 @@ impl<'a> CompilingCodeSegment<'a> {
 
     pub fn add_compiled_code(&mut self, compiled_code: CompiledCode) -> definition::ExecutionToken {
         self.buffer.push(compiled_code);
-        definition::ExecutionToken::DefinedOperation(self.compiled_code.len() + self.buffer.len() - 1)
+        definition::ExecutionToken::CompiledOperation(self.compiled_code.len() + self.buffer.len() - 1)
     }
 }

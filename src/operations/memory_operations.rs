@@ -5,24 +5,24 @@ use crate::hard_match_address;
 use crate::pop_or_underflow;
 
 
-pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let address = pop_address!(state.memory, state.stack);
     state.stack.push(state.memory.read::<value::Value>(address));
-    CONTINUE_RESULT
+    Result::Ok(())
 }
 
-pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let (address, value) = (pop_address!(state.memory, state.stack), pop_or_underflow!(state.stack, N));
     state.memory.write(address, value);
-    CONTINUE_RESULT
+    Result::Ok(())
 }
 
-pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.memory.push(pop_or_underflow!(state.stack, value::Value));
-    CONTINUE_RESULT
+    Result::Ok(())
 }
 
-pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
+pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let name = match get_token!(state) {
         io::tokens::Token::Name(name) => name,
         _ => return Result::Err(evaluate::Error::InvalidWord)
@@ -35,10 +35,10 @@ pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult {
     state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
         let number = pop_or_underflow!(state.stack, generic_numbers::Number);
         state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
-        CONTINUE_RESULT
+        Result::Ok(())
     })).value());
 
-    CONTINUE_RESULT
+    Result::Ok(())
 }
 
 macro_rules! generic_operations {

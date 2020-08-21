@@ -94,25 +94,25 @@ mod helper_functions {
     fn operation_result_handler<N: GenericNumber>(
         stack: &mut stack::Stack,
         result: Result<N, evaluate::Error>
-    ) -> evaluate::CodeResult {
-        result.map(|x| stack.push(x)).map(|_| evaluate::ControlFlowState::Continue)
+    ) -> evaluate::ForthResult {
+        result.map(|x| stack.push(x))
     }
 
     pub fn tertiary_operation<G: Glue>(
         stack: &mut stack::Stack,
         f: fn(G::Output, G::Output, G::Output) -> Result<G::Output, evaluate::Error>
-    ) -> evaluate::CodeResult {
+    ) -> evaluate::ForthResult {
         operation_args::<G>(stack, 3).map(|args| dispatcher!(3, f, args)).and_then(|result| operation_result_handler::<G::Output>(stack, result))
     }
         
-    pub fn mono_operation<G: Glue>(stack: &mut stack::Stack, f: fn(G::Output) -> G::Output) -> evaluate::CodeResult {
+    pub fn mono_operation<G: Glue>(stack: &mut stack::Stack, f: fn(G::Output) -> G::Output) -> evaluate::ForthResult {
         operation_args::<G>(stack, 1).map(|args| dispatcher!(1, f, args)).and_then(|result| operation_result_handler::<G::Output>(stack, Result::Ok(result)))
     }
 
     pub fn binary_operation<G: Glue>(
         stack: &mut stack::Stack,
         f: fn(G::Output, G::Output) -> Result<G::Output, evaluate::Error>,
-    ) -> evaluate::CodeResult {
+    ) -> evaluate::ForthResult {
         operation_args::<G>(stack, 2).map(|args| dispatcher!(2, f, args)).and_then(|result| operation_result_handler::<G::Output>(stack, result))
     }
 }
@@ -127,33 +127,33 @@ mod helper_functions {
  */
 
 // binary operations
-pub fn add<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a + b)) }
-pub fn sub<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b - a)) }
-pub fn multiply<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a * b)) }
-pub fn divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| if a == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok(b / a) }) }
-pub fn modulo<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b % a)) }
-pub fn min<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(cmp::min(a, b))) }
-pub fn max<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(cmp::max(a, b))) }
+pub fn add<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a + b)) }
+pub fn sub<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b - a)) }
+pub fn multiply<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(a * b)) }
+pub fn divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| if a == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok(b / a) }) }
+pub fn modulo<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b % a)) }
+pub fn min<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(cmp::min(a, b))) }
+pub fn max<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(cmp::max(a, b))) }
 // mono operations
-pub fn negate<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a.neg()) }
-pub fn abs<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a.abs()) }
+pub fn negate<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| a.neg()) }
+pub fn abs<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| a.abs()) }
 // // tertiary operators
-pub fn multiply_divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { tertiary_operation::<G>(&mut state.stack, |a, b, c| if c == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok((a * b) / c)}) }
+pub fn multiply_divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { tertiary_operation::<G>(&mut state.stack, |a, b, c| if c == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok((a * b) / c)}) }
 // // boolean operators
-pub fn equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a == b))) }
-pub fn not_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a != b))) }
-pub fn less_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b < a))) }
-pub fn greater_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b > a))) }
-pub fn less_than_or_equal<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b <= a))) }
-pub fn greater_than_or_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b >= a))) }
-pub fn equals_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a == G::Output::as_zero())) }
-pub fn less_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a < G::Output::as_zero())) }
-pub fn greater_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a > G::Output::as_zero())) }
+pub fn equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a == b))) }
+pub fn not_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a != b))) }
+pub fn less_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b < a))) }
+pub fn greater_than<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b > a))) }
+pub fn less_than_or_equal<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b <= a))) }
+pub fn greater_than_or_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(b >= a))) }
+pub fn equals_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a == G::Output::as_zero())) }
+pub fn less_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a < G::Output::as_zero())) }
+pub fn greater_than_zero<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| G::Output::from(a > G::Output::as_zero())) }
 // bitwise operations
-pub fn bitwise_and<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b & a)) }
-pub fn bitwise_or<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b | a)) }
-pub fn leftshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a << G::Output::as_one()) }
-pub fn rightshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::CodeResult { mono_operation::<G>(&mut state.stack, |a| a >> G::Output::as_one()) }
+pub fn bitwise_and<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b & a)) }
+pub fn bitwise_or<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(b | a)) }
+pub fn leftshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| a << G::Output::as_one()) }
+pub fn rightshift<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| a >> G::Output::as_one()) }
 
 // all
 macro_rules! overflowable_operations {

@@ -8,7 +8,8 @@ use crate::io::tokens;
 #[derive(Clone, Copy)]
 pub enum ExecutionToken {
     Operation(operations::Operation),
-    DefinedOperation(memory::Offset),
+    CompiledOperation(memory::Offset),
+    DefinedOperation(memory::Address),
     Number(generic_numbers::Number),
 }
 
@@ -16,7 +17,8 @@ impl ExecutionToken {
     pub fn to_offset(self) -> memory::Offset {
         match self {
             Self::Operation(_) => 0,
-            Self::DefinedOperation(i) => i,
+            Self::CompiledOperation(i) => i,
+            Self::DefinedOperation(address) => address.to_offset(),
             Self::Number(i) => i as memory::Offset
         }
     }
@@ -120,7 +122,6 @@ impl DefinitionSet {
 
     pub fn set(&mut self, nametag: NameTag, definition: Definition) -> NameTag {
         self.definitions[nametag.to_offset()] = definition;
-
         nametag
     }
 

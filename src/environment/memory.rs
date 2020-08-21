@@ -30,6 +30,10 @@ impl Address {
     pub fn to_number(self) -> generic_numbers::Number {
         self.0 as generic_numbers::Number
     }
+
+    pub fn to_offset(self) -> Offset {
+        self.0
+    }
 }
 
 pub struct Memory(Vec<value::Value>);

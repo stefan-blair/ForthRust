@@ -466,5 +466,9 @@ fn print_size_test() {
     assert_eq!("36893488147419103230 ", f.consume_output());    
 }
 
-// https://en.wikipedia.org/wiki/Threaded_code
-// https://www.bradrodriguez.com/papers/moving1.htm 
+/*
+ * Forth uses threaded code, where there are leaf functions that have actual code, and then functions that can do nothing but call other functions.
+ * 
+ * - make the read / writes return an error code if the address is... invalid?  so whats the point of even having checks initially?  maybe make it check at time of use, 
+ * and just make Address some wrapper around number
+ */

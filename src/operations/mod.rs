@@ -22,9 +22,6 @@ use crate::postpone;
 use crate::maybe;
 
 
-// most operations simply return an Ok(Continue), simple shorthand to make the operations code cleaner
-const CONTINUE_RESULT: evaluate::CodeResult = Result::Ok(evaluate::ControlFlowState::Continue);
-
 // a set of macros to help simplify the operations
 mod helper_macros {
     #[macro_export]
@@ -96,7 +93,7 @@ mod helper_macros {
         ($v:expr) => {
             |state: &mut evaluate::ForthEvaluator| match state.stack.peek::<value::Value>().map(|value| value.to_number()) {
                 Some(x) if x > 0 => $v(state),
-                Some(_) => CONTINUE_RESULT,
+                Some(_) => Result::Ok(()),
                 None => Result::Err(evaluate::Error::StackUnderflow),
             }
         };
@@ -111,7 +108,7 @@ mod helper_macros {
             |state| {
                 while let Some(io::tokens::Token::Name(name)) = state.input_stream.next() {
                     if name == $closing_brace {
-                        return CONTINUE_RESULT;
+                        return Result::Ok(());
                     }
                 }
             
@@ -138,26 +135,26 @@ mod code_compiler_helpers {
     pub fn create_branch_false_instruction(destination: memory::Address) -> evaluate::compiled_code::CompiledCode {
         Box::new(move |state| {
             match pop_or_underflow!(state.stack, value::Value) {
-                value if value.to_number() > 0 => CONTINUE_RESULT,
-                _ => Result::Ok(evaluate::ControlFlowState::Jump(destination)),
+                value if value.to_number() > 0 => Result::Ok(()),
+                _ => state.jump_to(destination)
             }
         })
     }
 
     pub fn create_branch_instruction(destination: memory::Address) -> evaluate::compiled_code::CompiledCode {
-        Box::new(move |_| Result::Ok(evaluate::ControlFlowState::Jump(destination)))
+        Box::new(move |state| state.jump_to(destination))
     }
 
     pub fn push_value(value: value::Value) -> evaluate::compiled_code::CompiledCode {
         Box::new(move |state| {
             state.stack.push(value);
-            CONTINUE_RESULT
+            Result::Ok(())
         })
     }
 }
 
 // built in operators; name, whether its immediate or not, and the function to execute
-pub type Operation = fn(&mut evaluate::ForthEvaluator) -> evaluate::CodeResult;
+pub type Operation = fn(&mut evaluate::ForthEvaluator) -> evaluate::ForthResult;
 
 /**
  * This is the main function that this module provides.  It takes all of the operations defined in each submodule,
@@ -186,5 +183,5 @@ pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     ": ELSE POSTPONE 0 HERE 1 ALLOT SWAP HERE _BNE SWAP ! ; IMMEDIATE",
     ": THEN HERE _BNE SWAP ! ; IMMEDIATE",
     // get current index of do ... loop
-    ": I R@ ;"
+    ": I R> R@ SWAP >R ;"
 ];
