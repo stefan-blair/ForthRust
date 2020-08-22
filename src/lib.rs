@@ -23,6 +23,10 @@ impl Forth {
         self.state.stack.to_vec().iter().map(|x| x.to_number()).collect::<Vec<_>>()
     }
 
+    pub fn return_stack(&self) -> Vec<Number> {
+        self.state.return_stack.to_vec().iter().map(|x| x.to_number()).collect::<Vec<_>>()
+    }
+
     pub fn consume_output(&mut self) -> String {
         self.state.output_stream.consume()
     }

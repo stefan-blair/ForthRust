@@ -27,6 +27,10 @@ impl Address {
         Address(self.0 + (i * mem::size_of::<ValueSize>()))
     }
 
+    pub fn minus_cell(self, i: Offset) -> Self {
+        Address(self.0 - (i * mem::size_of::<ValueSize>()))
+    }
+
     pub fn to_number(self) -> generic_numbers::Number {
         self.0 as generic_numbers::Number
     }

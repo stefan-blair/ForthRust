@@ -399,6 +399,7 @@ fn do_loop_index_test() {
     assert!(f.eval(": TEST   10 0 DO I DUP LOOP ;").is_ok());
     assert_eq!(Vec::<Number>::new(), f.stack());
     assert!(f.eval("TEST").is_ok());
+    println!("{}", f.consume_output());
     assert_eq!(vec![0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9], f.stack());
 }
 
