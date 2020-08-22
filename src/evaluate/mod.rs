@@ -73,7 +73,7 @@ impl ForthState {
         };
 
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
-            let token_iterator = tokens::TokenStream::from_string(definition);
+            let token_iterator = tokens::TokenStream::new(definition.chars());
             new_forth_state.evaluate(token_iterator).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
         }
 

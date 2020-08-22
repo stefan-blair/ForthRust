@@ -445,6 +445,14 @@ fn while_repeat_loop_test() {
 }
 
 #[test]
+fn print_string_test() {
+    let mut f = Forth::new();
+    assert!(f.eval(": test .\" hello world this is a test \" 2 2 + . ;").is_ok());
+    assert!(f.eval("test").is_ok());
+    assert_eq!(f.consume_output(), "hello world this is a test 4 ");
+}
+
+#[test]
 fn literal_test() {
     let mut f = Forth::new();
     assert!(f.eval(": FOUR-MORE  [ 4 ] LITERAL + ;").is_ok());

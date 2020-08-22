@@ -23,12 +23,32 @@ impl Address {
         self.0 += mem::size_of::<ValueSize>();
     }
 
+    pub fn increment(&mut self) {
+        self.0 += 1;
+    }
+
+    pub fn less_than(self, other: Address) -> bool {
+        self.0 < other.0
+    }
+
+    /**
+     * If the address is not aligned to the size of a cell, get the next cell.
+     */
+    pub fn nearest_cell(&self) -> Self {
+        let cell_size = mem::size_of::<ValueSize>();
+        Self(((self.0 + (cell_size - 1)) / 8) * 8)
+    }
+
     pub fn plus_cell(self, i: Offset) -> Self {
         Address(self.0 + (i * mem::size_of::<ValueSize>()))
     }
 
     pub fn minus_cell(self, i: Offset) -> Self {
         Address(self.0 - (i * mem::size_of::<ValueSize>()))
+    }
+
+    pub fn plus(self, i: Offset) -> Self {
+        Address(self.0 + i)
     }
 
     pub fn to_number(self) -> generic_numbers::Number {

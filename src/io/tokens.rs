@@ -1,49 +1,38 @@
-use std::iter;
-
 use crate::environment::generic_numbers;
 
 
 pub struct TokenStream<'a> {
-    iterator: Box<(dyn Iterator<Item = Token> + 'a)>,
-    cache: Option<Token>
+    stream: Box<dyn Iterator<Item = char> + 'a>
 }
 
 impl<'a> TokenStream<'a> {
-    pub fn new(iterator: Box<dyn Iterator<Item = Token> + 'a>) -> Self {
-        TokenStream {
-            iterator,
-            cache: None
-        }
-    }
-
-    pub fn from_string(string: &'a str) -> Self {
-        Self::new(Box::new(string.split_ascii_whitespace().map(|s| Token::tokenize(s))))
-    }
-
-    pub fn _empty() -> Self {
-        TokenStream {
-            iterator: Box::new(iter::empty()),
-            cache: None
-        }
+    pub fn new<I: Iterator<Item = char> + 'a>(stream: I) -> Self {
+        Self { stream: Box::new(stream) }
     }
 
     pub fn next(&mut self) -> Option<Token> {
-        self.cache.take().or_else(|| self.iterator.next())
+        let mut s = String::new();
+        if let Some(c) = self.stream.find(|c| !c.is_whitespace()) {
+            s.push(c);
+            while let Some(next_char) = self.stream.next() {
+                if next_char.is_whitespace() {
+                    break;
+                } else {
+                    s.push(next_char)
+                }
+            }
+
+            Some(Token::tokenize(&s))
+        } else {
+            None
+        }
     }
 
-    pub fn _push(&mut self, token: Token) {
-        self.cache = Some(token);
+    pub fn next_char(&mut self) -> Option<char> {
+        self.stream.next()
     }
 
-    pub fn _with_push(mut self, token: Token) -> Self {
-        self._push(token);
-        self
-    }
-
-    pub fn _peek(&mut self) -> Option<&Token> {
-        self.cache = self.next();
-        self.cache.as_ref()
-    }
+    // todo: implement some sort of next_char function
 }
 
 #[derive(Debug)]

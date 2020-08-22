@@ -13,7 +13,6 @@ pub fn dup<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> eval
     Result::Ok(()) 
 }
 pub fn drop<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { pop_or_underflow!(state.stack, T); Result::Ok(()) }
-pub fn rdrop<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { pop_or_underflow!(state.return_stack, T); Result::Ok(()) }
 pub fn swap<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
     let (a, b) = get_two_from_stack!(&mut state.stack, T, T);
     state.stack.push(a);

@@ -32,7 +32,7 @@ impl Forth {
     }
 
     pub fn eval(&mut self, input: &str) -> evaluate::ForthResult {
-        let token_stream = tokens::TokenStream::from_string(input);
+        let token_stream = tokens::TokenStream::new(input.chars());
         self.state.evaluate(token_stream)
     }
 }
