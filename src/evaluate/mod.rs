@@ -45,8 +45,6 @@ pub struct ForthState {
 
     pub execution_mode: ExecutionMode,
     pub instruction_pointer: Option<memory::Address>,
-
-    pub output_stream: output_stream::OutputStream,
 }
 
 impl ForthState {
@@ -68,19 +66,18 @@ impl ForthState {
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
-
-            output_stream: output_stream::OutputStream::new()
         };
 
+        let mut dummy_output = output_stream::DropOutputStream::new();
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
             let token_iterator = tokens::TokenStream::new(definition.chars());
-            new_forth_state.evaluate(token_iterator).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
+            new_forth_state.evaluate(token_iterator, &mut dummy_output).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
         }
 
         new_forth_state
     }
 
-    fn evaluator<'f, 'i>(&'f mut self, input_stream: tokens::TokenStream<'i>) -> ForthEvaluator<'f, 'i> {
+    fn evaluator<'f, 'i>(&'f mut self, input_stream: tokens::TokenStream<'i>, output_stream: &'i mut dyn output_stream::OutputStream) -> ForthEvaluator<'f, 'i> {
         ForthEvaluator {
             input_stream: input_stream,
             compiled_code: self.compiled_code.borrow(),
@@ -94,29 +91,30 @@ impl ForthState {
             execution_mode: &mut self.execution_mode,
             instruction_pointer: &mut self.instruction_pointer,
 
-            output_stream: &mut self.output_stream
+            output_stream: output_stream
         }
     }
 
-    pub fn evaluate(&mut self, mut input_stream: tokens::TokenStream) -> ForthResult {
+    pub fn evaluate<'f, 'i>(&'f mut self, mut input_stream: tokens::TokenStream<'i>, mut output_stream: &'i mut dyn output_stream::OutputStream) -> ForthResult {
         loop {
-            let mut evaluator = self.evaluator(input_stream);
-
+            let mut evaluator = self.evaluator(input_stream, output_stream);
             match evaluator.step() {
-                Result::Err(Error::TokenStreamEmpty) => break,
-                Result::Err(error) => {
-                    println!("error = {:?} before {:?}", error, evaluator.input_stream.next());
-                    return Result::Err(error)
+                Err(Error::TokenStreamEmpty) => break,
+                Err(error) => {
+                    println!("error = {:?}", error);
+                    return Err(error)
                 },
-                Result::Ok(_) => ()
+                Ok(_) => ()
             }
 
             input_stream = evaluator.input_stream;
+            output_stream = evaluator.output_stream;
+
             let buffer = evaluator.compiled_code.buffer;
             self.compiled_code.restore(buffer);
         }
 
-        Result::Ok(())
+        Ok(())
     }
 }
 
@@ -125,7 +123,7 @@ impl ForthState {
  */
 pub struct ForthEvaluator<'f, 'i> {
     pub input_stream: tokens::TokenStream<'i>,
-    pub output_stream: &'f mut output_stream::OutputStream,
+    pub output_stream: &'i mut dyn output_stream::OutputStream,
 
     pub compiled_code: compiled_code::CompilingCodeSegment<'f>,
 
@@ -145,7 +143,7 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
             definition::ExecutionToken::DefinedOperation(address) => self.invoke_at(address),
             definition::ExecutionToken::Operation(fptr) => fptr(self),
             definition::ExecutionToken::CompiledOperation(_) => self.compiled_code.compiled_code.get(execution_token)(self),
-            definition::ExecutionToken::Number(i) => Result::Ok(self.stack.push(i))
+            definition::ExecutionToken::Number(i) => Ok(self.stack.push(i))
         }
     }
 
@@ -159,22 +157,22 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
 
     pub fn return_from(&mut self) -> ForthResult {
         *self.instruction_pointer = self.return_stack.pop().and_then(|number| self.memory.address_from(number));
-        Result::Ok(())
+        Ok(())
     }
 
     pub fn jump_to(&mut self, address: memory::Address) -> ForthResult {
         *self.instruction_pointer = Some(address);
-        Result::Ok(())
+        Ok(())
     }
 
     pub fn set_compilemode(&mut self) -> ForthResult {
         *self.execution_mode = ExecutionMode::Compile;
-        Result::Ok(())
+        Ok(())
     }
 
     pub fn set_interpretmode(&mut self) -> ForthResult {
         *self.execution_mode = ExecutionMode::Interpret;
-        Result::Ok(())
+        Ok(())
     }
 
     fn execute_next(&mut self) -> ForthResult {
@@ -183,7 +181,7 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
             let xt = self.memory.read(instruction_pointer);
             self.execute(xt)
         } else {
-            Result::Err(Error::InvalidAddress)
+            Err(Error::InvalidAddress)
         }
     }
 
@@ -195,7 +193,7 @@ impl<'f, 'i> ForthEvaluator<'f, 'i> {
                 self.input_stream.next().ok_or(Error::TokenStreamEmpty)
                     .and_then(|token| self.definitions.get_from_token(token).ok_or(Error::UnknownWord))
                     .and_then(|definition| if *self.execution_mode == ExecutionMode::Compile && !definition.immediate {
-                        Result::Ok(self.memory.push(definition.execution_token.value()))
+                        Ok(self.memory.push(definition.execution_token.value()))
                     } else {
                         self.execute(definition.execution_token)
                     })

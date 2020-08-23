@@ -1,3 +1,5 @@
+use std::mem::replace;
+
 use crate::evaluate;
 use super::definition;
 
@@ -48,5 +50,9 @@ impl<'a> CompilingCodeSegment<'a> {
     pub fn add_compiled_code(&mut self, compiled_code: CompiledCode) -> definition::ExecutionToken {
         self.buffer.push(compiled_code);
         definition::ExecutionToken::CompiledOperation(self.compiled_code.len() + self.buffer.len() - 1)
+    }
+
+    pub fn take_buffer(&mut self) -> Vec<CompiledCode> {
+        replace(&mut self.buffer, Vec::new())
     }
 }
