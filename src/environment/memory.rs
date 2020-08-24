@@ -109,6 +109,10 @@ impl Memory {
     pub fn read<T: value::ValueVariant>(&mut self, address: Address) -> T {
         T::read_from_memory(self, address)
     }
+
+    pub fn debug_only_get_vec<'a>(&'a self) -> &'a Vec<value::Value> {
+        &self.0
+    }
 }
 
 impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {

@@ -2,8 +2,6 @@ use super::*;
 
 
 pub fn pop_and_print<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let number = pop_or_underflow!(state.stack, N);
-    println!("popped number {:?}", number);
     state.output_stream.write(&format!("{:?} ", pop_or_underflow!(state.stack, N)));
     Result::Ok(())
 }
@@ -37,6 +35,8 @@ pub fn print_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
 
     }).value());
 
+    // TODO: THERE SEEMS TO BE A BUG HERE where it pushes 32 onto the stack somewhere for some reason ....
+
     let length_address = state.memory.top();
     let mut string_address = length_address.plus(1);
     let mut length: generic_numbers::UnsignedByte = 0;
@@ -55,7 +55,7 @@ pub fn print_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
         }
     }
     state.memory.write(length_address, length);
-    
+
     
     Result::Ok(())
 }

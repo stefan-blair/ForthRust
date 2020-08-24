@@ -132,7 +132,7 @@ mod helper_macros {
 mod code_compiler_helpers {
     use super::*;
 
-    pub fn create_branch_false_instruction(destination: memory::Address) -> evaluate::compiled_code::CompiledCode {
+    pub fn create_branch_false_instruction<'a>(destination: memory::Address) -> evaluate::compiled_code::CompiledCode<'a> {
         Box::new(move |state| {
             match pop_or_underflow!(state.stack, value::Value) {
                 value if value.to_number() > 0 => Result::Ok(()),
@@ -141,11 +141,11 @@ mod code_compiler_helpers {
         })
     }
 
-    pub fn create_branch_instruction(destination: memory::Address) -> evaluate::compiled_code::CompiledCode {
+    pub fn create_branch_instruction<'a>(destination: memory::Address) -> evaluate::compiled_code::CompiledCode<'a> {
         Box::new(move |state| state.jump_to(destination))
     }
 
-    pub fn push_value(value: value::Value) -> evaluate::compiled_code::CompiledCode {
+    pub fn push_value<'a>(value: value::Value) -> evaluate::compiled_code::CompiledCode<'a> {
         Box::new(move |state| {
             state.stack.push(value);
             Result::Ok(())
@@ -155,12 +155,13 @@ mod code_compiler_helpers {
 
 // built in operators; name, whether its immediate or not, and the function to execute
 pub type Operation = fn(&mut evaluate::ForthEvaluator) -> evaluate::ForthResult;
+pub type OperationTable = Vec<(&'static str, bool, Operation)>;
 
 /**
  * This is the main function that this module provides.  It takes all of the operations defined in each submodule,
  * and compiles them into one vector.  
  */
-pub fn get_operations() -> Vec<(&'static str, bool, Operation)> {
+pub fn get_operations() -> OperationTable {
     vec![
         arithmetic_operations::get_operations(),
         memory_operations::get_operations(),

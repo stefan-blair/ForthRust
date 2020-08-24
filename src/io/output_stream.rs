@@ -42,6 +42,6 @@ impl DropOutputStream {
 }
 
 impl OutputStream for DropOutputStream {
-    fn write(&mut self, m: &str) {}
-    fn writeln(&mut self, m: &str) {}
+    fn write(&mut self, _m: &str) {}
+    fn writeln(&mut self, _m: &str) {}
 }

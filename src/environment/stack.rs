@@ -1,15 +1,14 @@
 use super::value;
-use super::memory;
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
 
 
 // contains stack in the vec, and offset contains the current base pointer (not used in data stack)
-pub struct Stack(Vec<value::Value>, memory::Offset);
+pub struct Stack(Vec<value::Value>);
 
 impl Stack {
     pub fn new() -> Self {
-        Stack(Vec::new(), 0)
+        Stack(Vec::new())
     }
 
     pub(super) fn push_value(&mut self, value: value::Value) {
@@ -37,6 +36,10 @@ impl Stack {
 
     pub fn to_vec(&self) -> Vec<value::Value> {
         self.0.clone()
+    }
+
+    pub fn debug_only_get_vec<'a>(&'a self) -> &'a Vec<value::Value> {
+        &self.0
     }
 }
 

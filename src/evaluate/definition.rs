@@ -16,7 +16,7 @@ pub enum ExecutionToken {
 impl ExecutionToken {
     pub fn to_offset(self) -> memory::Offset {
         match self {
-            Self::Operation(_) => 0,
+            Self::Operation(fptr) => fptr as memory::Offset,
             Self::CompiledOperation(i) => i,
             Self::DefinedOperation(address) => address.to_offset(),
             Self::Number(i) => i as memory::Offset
@@ -80,6 +80,10 @@ pub struct DefinitionSet {
 }
 
 impl DefinitionSet {
+    pub fn new() -> Self {
+        Self::from_definitions(Vec::new(), HashMap::new())
+    }
+
     pub fn from_definitions(definitions: Vec<Definition>, nametag_map: HashMap<String, NameTag>) -> Self {
         DefinitionSet {
             nametag_map,
@@ -127,5 +131,25 @@ impl DefinitionSet {
 
     pub fn get_most_recent(&self) -> NameTag {
         self.most_recent
+    }
+
+    pub fn debug_only_get_name(&self, execution_token: ExecutionToken) -> Option<String> {
+        fn equal(a: ExecutionToken, b: ExecutionToken) -> bool {
+            match (a, b) {
+                (ExecutionToken::Number(a), ExecutionToken::Number(b)) => a == b,
+                (ExecutionToken::Operation(a), ExecutionToken::Operation(b)) => (a as usize) == (b as usize),
+                (ExecutionToken::DefinedOperation(a), ExecutionToken::DefinedOperation(b)) => a == b,
+                (ExecutionToken::CompiledOperation(a), ExecutionToken::CompiledOperation(b)) => a == b,
+                _ => false
+            }
+        }
+
+        for (name, xt) in self.nametag_map.iter().map(|(name, key)| (name, self.get(*key).execution_token)) {
+            if equal(execution_token, xt) {
+                return Some(name.clone())
+            }
+        }
+
+        None
     }
 }

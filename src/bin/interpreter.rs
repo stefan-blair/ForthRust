@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use forth::{Forth, output_stream};
+use forth::{Forth, output_stream, debugger};
 
 
 /**
@@ -52,6 +52,7 @@ impl output_stream::OutputStream for StdoutStream {
 
 fn main() {
     let mut forth = Forth::new(StdoutStream::new());
+    forth.add_operations(vec![("DEBUG", false, debugger::debug)]);
     let result = forth.eval_stream(StdinStream::new());
     println!("Finished evaluating: {:?}", result);
 }

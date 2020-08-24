@@ -33,8 +33,8 @@ pub enum ExecutionMode {
 /**
  * This struct contains the state required to execute / emulate the code
  */
-pub struct ForthState {
-    pub compiled_code: compiled_code::CompiledCodeSegment,
+pub struct ForthState<'a> {
+    pub compiled_code: compiled_code::CompiledCodeSegment<'a>,
 
     pub definitions: definition::DefinitionSet,
 
@@ -47,18 +47,11 @@ pub struct ForthState {
     pub instruction_pointer: Option<memory::Address>,
 }
 
-impl ForthState {
+impl<'a> ForthState<'a> {
     pub fn new() -> Self {
-        let default_operations = operations::get_operations();
-        let definitions = default_operations.iter().map(|(_, immediate, operation)| {
-            definition::Definition::new(definition::ExecutionToken::Operation(*operation), *immediate)
-        }).collect();
-        let nametag_map = default_operations.iter().enumerate().map(|(i, (name, _, _))| (name.to_string(), definition::NameTag(i))).collect();
-        let definitions = definition::DefinitionSet::from_definitions(definitions, nametag_map);
-
         let mut new_forth_state = Self {
             compiled_code: compiled_code::CompiledCodeSegment::new(),
-            definitions,
+            definitions: definition::DefinitionSet::new(),
 
             return_stack: stack::Stack::new(),
             stack: stack::Stack::new(),
@@ -66,7 +59,7 @@ impl ForthState {
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
-        };
+        }.with_operations(operations::get_operations());
 
         let mut dummy_output = output_stream::DropOutputStream::new();
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
@@ -77,27 +70,35 @@ impl ForthState {
         new_forth_state
     }
 
-    fn evaluator<'f, 'i>(&'f mut self, input_stream: tokens::TokenStream<'i>, output_stream: &'i mut dyn output_stream::OutputStream) -> ForthEvaluator<'f, 'i> {
-        ForthEvaluator {
-            input_stream: input_stream,
-            compiled_code: self.compiled_code.borrow(),
+    pub fn add_operations(&mut self, operations: operations::OperationTable) {
+        for (name, immediate, operation) in operations {
+            self.definitions.add(name.to_string(), definition::Definition::new(definition::ExecutionToken::Operation(operation), immediate));
+        };
+    }
 
-            definitions: &mut self.definitions,
-
-            return_stack: &mut self.return_stack,
-            stack: &mut self.stack,
-            memory: &mut self.memory,
-
-            execution_mode: &mut self.execution_mode,
-            instruction_pointer: &mut self.instruction_pointer,
-
-            output_stream: output_stream
-        }
+    pub fn with_operations(mut self, operations: operations::OperationTable) -> Self {
+        self.add_operations(operations);
+        self
     }
 
     pub fn evaluate<'f, 'i>(&'f mut self, mut input_stream: tokens::TokenStream<'i>, mut output_stream: &'i mut dyn output_stream::OutputStream) -> ForthResult {
         loop {
-            let mut evaluator = self.evaluator(input_stream, output_stream);
+            let mut evaluator = ForthEvaluator {
+                input_stream: input_stream,
+                output_stream: output_stream,
+
+                compiled_code: self.compiled_code.borrow(),
+    
+                definitions: &mut self.definitions,
+    
+                return_stack: &mut self.return_stack,
+                stack: &mut self.stack,
+                memory: &mut self.memory,
+    
+                execution_mode: &mut self.execution_mode,
+                instruction_pointer: &mut self.instruction_pointer,
+            };
+            
             match evaluator.step() {
                 Err(Error::TokenStreamEmpty) => break,
                 Err(error) => {
@@ -121,11 +122,11 @@ impl ForthState {
 /**
  * 
  */
-pub struct ForthEvaluator<'f, 'i> {
+pub struct ForthEvaluator<'f, 'i, 'a, 'b> {
     pub input_stream: tokens::TokenStream<'i>,
     pub output_stream: &'i mut dyn output_stream::OutputStream,
 
-    pub compiled_code: compiled_code::CompilingCodeSegment<'f>,
+    pub compiled_code: compiled_code::CompilingCodeSegment<'a, 'b>,
 
     pub definitions: &'f mut definition::DefinitionSet,
 
@@ -137,7 +138,7 @@ pub struct ForthEvaluator<'f, 'i> {
     pub execution_mode: &'f mut ExecutionMode,
 }
 
-impl<'f, 'i> ForthEvaluator<'f, 'i> {
+impl<'f, 'i, 'a, 'b> ForthEvaluator<'f, 'i, 'a, 'b> {
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
         match execution_token {
             definition::ExecutionToken::DefinedOperation(address) => self.invoke_at(address),
