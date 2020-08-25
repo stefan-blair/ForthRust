@@ -38,7 +38,7 @@ where OUT: io::output_stream::OutputStream + 'a {
     }
 
     pub fn eval_stream<'b, I: Iterator<Item = char> + 'b>(&mut self, stream: I) -> evaluate::ForthResult {
-        self.state.evaluate(tokens::TokenStream::new(stream), &mut self.output_stream)
+        self.state.evaluate(&mut tokens::TokenStream::new(stream), &mut self.output_stream)
     }
 
     pub fn add_operations(&mut self, operations: operations::OperationTable) {

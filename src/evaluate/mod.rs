@@ -63,8 +63,8 @@ impl<'a> ForthState<'a> {
 
         let mut dummy_output = output_stream::DropOutputStream::new();
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
-            let token_iterator = tokens::TokenStream::new(definition.chars());
-            new_forth_state.evaluate(token_iterator, &mut dummy_output).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
+            let mut token_iterator = tokens::TokenStream::new(definition.chars());
+            new_forth_state.evaluate(&mut token_iterator, &mut dummy_output).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
         }
 
         new_forth_state
@@ -81,7 +81,7 @@ impl<'a> ForthState<'a> {
         self
     }
 
-    pub fn evaluate<'f, 'i>(&'f mut self, mut input_stream: tokens::TokenStream<'i>, mut output_stream: &'i mut dyn output_stream::OutputStream) -> ForthResult {
+    pub fn evaluate<'f, 'i, 'o, 't>(&'f mut self, mut input_stream: &'i mut tokens::TokenStream<'t>, mut output_stream: &'o mut dyn output_stream::OutputStream) -> ForthResult {
         loop {
             let mut evaluator = ForthEvaluator {
                 input_stream: input_stream,
@@ -122,9 +122,9 @@ impl<'a> ForthState<'a> {
 /**
  * 
  */
-pub struct ForthEvaluator<'f, 'i, 'a, 'b> {
-    pub input_stream: tokens::TokenStream<'i>,
-    pub output_stream: &'i mut dyn output_stream::OutputStream,
+pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
+    pub input_stream: &'i mut tokens::TokenStream<'t>,
+    pub output_stream: &'o mut dyn output_stream::OutputStream,
 
     pub compiled_code: compiled_code::CompilingCodeSegment<'a, 'b>,
 
@@ -138,7 +138,7 @@ pub struct ForthEvaluator<'f, 'i, 'a, 'b> {
     pub execution_mode: &'f mut ExecutionMode,
 }
 
-impl<'f, 'i, 'a, 'b> ForthEvaluator<'f, 'i, 'a, 'b> {
+impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
         match execution_token {
             definition::ExecutionToken::DefinedOperation(address) => self.invoke_at(address),

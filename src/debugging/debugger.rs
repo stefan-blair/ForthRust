@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::io;
+use crate::io::{self, output_stream::OutputStream};
 use crate::evaluate::{self, compiled_code, definition};
 use crate::environment::{stack, memory};
 
@@ -51,7 +51,7 @@ pub fn debug(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
 
     // add an operation to exit the debugger
     let mut debug_state = evaluate::ForthState::new()
-        .with_operations(vec![("END", false, |state| Err(evaluate::Error::TokenStreamEmpty))]);
+        .with_operations(vec![("END", false, |_| Err(evaluate::Error::TokenStreamEmpty))]);
 
     // add in the remainder of the debug operations
     for (name, operation) in debug_operations::DEBUG_OPERATIONS.iter() {
@@ -59,12 +59,9 @@ pub fn debug(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
         debug_state.definitions.add(name.to_string(), evaluate::definition::Definition::new(xt, false));
     }
 
-    
+    state.output_stream.writeln("Debugging.  Use the END command to resume execution.");
     // borrow the io streams from the debugged state and run the debugger
-    /**
-     * make the evaluator just have a reference to the input stream, rather than taking it
-     */
-    let result = debug_state.evaluate(std::mem::replace(&mut state.input_stream, io::tokens::TokenStream::new(std::iter::empty())), state.output_stream);
+    let result = debug_state.evaluate(state.input_stream, state.output_stream);
 
     result
 }

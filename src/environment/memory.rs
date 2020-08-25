@@ -76,6 +76,15 @@ impl Memory {
         }
     }
 
+    pub fn address_from_cell(&self, number: generic_numbers::Number) -> Option<Address> {
+        let possible_address = number as Offset;
+        if possible_address < self.0.len() {
+            Some(Address(possible_address * mem::size_of::<ValueSize>()))
+        } else {
+            None
+        }
+    }
+
     pub fn top(&self) -> Address {
         Address((self.0.len() - 1) * mem::size_of::<ValueSize>())
     }
@@ -98,7 +107,7 @@ impl Memory {
         self.0[address.get_cell()] = value
     }
 
-    pub fn read_value(&mut self, address: Address) -> value::Value {
+    pub fn read_value(&self, address: Address) -> value::Value {
         self.0[address.get_cell()]
     }
 
@@ -106,7 +115,7 @@ impl Memory {
         number.write_to_memory(self, address)
     }
 
-    pub fn read<T: value::ValueVariant>(&mut self, address: Address) -> T {
+    pub fn read<T: value::ValueVariant>(&self, address: Address) -> T {
         T::read_from_memory(self, address)
     }
 

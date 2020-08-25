@@ -44,7 +44,7 @@ impl value::ValueVariant for ExecutionToken {
         memory.write_value(address, self.value())
     }
 
-    fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self {
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
         match memory.read_value(address) {
             value::Value::ExecutionToken(xt) => xt,
             value::Value::Number(n) => ExecutionToken::Number(n)

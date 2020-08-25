@@ -84,7 +84,7 @@ macro_rules! generic_number {
                 memory.write_number_by_type(address, self);
             }
 
-            fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self {
+            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
                 memory.read_number_by_type(address)
             }
         }
@@ -121,7 +121,7 @@ macro_rules! generic_number {
                 memory.write_number_by_type(address, self as $name)
             }
 
-            fn read_from_memory(memory: &mut memory::Memory, address: memory::Address) -> Self {
+            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
                 let number: $name = memory.read_number_by_type(address);
                 number as $unsigned_type
             }
