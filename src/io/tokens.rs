@@ -43,9 +43,12 @@ pub enum Token {
 
 impl Token {
     pub fn tokenize(s: &str) -> Self {
-        s.to_uppercase()
-            .as_str()
-            .parse::<generic_numbers::Number>()
-            .map_or_else(|_| Token::Name(s.to_uppercase()), |i| Token::Integer(i))
+        fn parse_number(s: &str) -> Option<generic_numbers::Number> {
+            s.strip_prefix("0x").and_then(|x| generic_numbers::Number::from_str_radix(x, 16).ok())
+            .or_else(|| s.strip_prefix("0b").and_then(|x| generic_numbers::Number::from_str_radix(x, 2).ok()))
+            .or_else(|| s.parse::<generic_numbers::Number>().ok())
+        }
+
+        parse_number(s).map_or_else(|| Token::Name(s.to_uppercase()), |i| Token::Integer(i))
     }
 }

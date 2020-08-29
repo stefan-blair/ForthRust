@@ -1,31 +1,8 @@
-use std::mem;
-
-use crate::io::{self, output_stream::OutputStream};
-use crate::evaluate::{self, compiled_code, definition};
+use crate::evaluate::{self, definition};
 use crate::environment::{stack, memory};
 
 use super::debug_operations;
 
-/**
- * The debugger itself is implemented in forth!  its a separate forth interpreter, but it has some additional keywords.
- */
-
-struct DebuggerClosure<'a> {
-    debug_target: &'a DebugTarget<'a>,
-    operation: debug_operations::DebugOperation
-}
-
-impl<'a> DebuggerClosure<'a> {
-    fn new(debug_target: &'a DebugTarget<'a>, operation: debug_operations::DebugOperation) -> Self {
-        Self { debug_target, operation }
-    }
-
-    fn call(&self, debug_state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-        let operation = self.operation;
-        operation(debug_state, *self.debug_target);
-        Ok(())
-    }
-}
 
 #[derive(Clone, Copy)]
 pub(super) struct DebugTarget<'a> {
@@ -61,7 +38,9 @@ pub fn debug(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
 
     state.output_stream.writeln("Debugging.  Use the END command to resume execution.");
     // borrow the io streams from the debugged state and run the debugger
-    let result = debug_state.evaluate(state.input_stream, state.output_stream);
-
-    result
+    debug_state.evaluate(state.input_stream, state.output_stream)
 }
+
+/*
+write an operation for breakpoints
+*/

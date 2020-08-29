@@ -1,5 +1,3 @@
-use std::mem;
-
 use crate::evaluate;
 use super::definition;
 

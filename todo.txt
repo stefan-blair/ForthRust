@@ -1,1 +1,6 @@
 Make the debugger into an optional feature
+Check if starts with H and then add the format in
+Make the debugger able to set breakpoints and step
+
+the DOES command might break... because it does execute().and_then(execute), but now execute only does one instruction at a time!
+

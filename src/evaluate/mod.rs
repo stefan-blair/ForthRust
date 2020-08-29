@@ -22,6 +22,8 @@ pub enum Error {
     
     // this isn't a bad error, just a result that the input stream has finished cleanly
     TokenStreamEmpty,
+    // this isn't a bad error, just a result that some command has asked to halt execution
+    Halt
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,10 +36,8 @@ pub enum ExecutionMode {
  * This struct contains the state required to execute / emulate the code
  */
 pub struct ForthState<'a> {
-    pub compiled_code: compiled_code::CompiledCodeSegment<'a>,
-
     pub definitions: definition::DefinitionSet,
-
+    pub compiled_code: compiled_code::CompiledCodeSegment<'a>,
     // the return stack is not actually used as a return stack, but is still provided for other uses
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
@@ -81,25 +81,9 @@ impl<'a> ForthState<'a> {
         self
     }
 
-    pub fn evaluate<'f, 'i, 'o, 't>(&'f mut self, mut input_stream: &'i mut tokens::TokenStream<'t>, mut output_stream: &'o mut dyn output_stream::OutputStream) -> ForthResult {
+    pub fn evaluate<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {
         loop {
-            let mut evaluator = ForthEvaluator {
-                input_stream: input_stream,
-                output_stream: output_stream,
-
-                compiled_code: self.compiled_code.borrow(),
-    
-                definitions: &mut self.definitions,
-    
-                return_stack: &mut self.return_stack,
-                stack: &mut self.stack,
-                memory: &mut self.memory,
-    
-                execution_mode: &mut self.execution_mode,
-                instruction_pointer: &mut self.instruction_pointer,
-            };
-            
-            match evaluator.step() {
+            match self.step(input_stream, output_stream){
                 Err(Error::TokenStreamEmpty) => break,
                 Err(error) => {
                     println!("error = {:?}", error);
@@ -107,15 +91,34 @@ impl<'a> ForthState<'a> {
                 },
                 Ok(_) => ()
             }
-
-            input_stream = evaluator.input_stream;
-            output_stream = evaluator.output_stream;
-
-            let buffer = evaluator.compiled_code.buffer;
-            self.compiled_code.restore(buffer);
         }
 
         Ok(())
+    }
+
+    pub fn step<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {
+        let mut evaluator = ForthEvaluator {
+            input_stream: input_stream,
+            output_stream: output_stream,
+
+            compiled_code: self.compiled_code.borrow(),
+
+            definitions: &mut self.definitions,
+
+            return_stack: &mut self.return_stack,
+            stack: &mut self.stack,
+            memory: &mut self.memory,
+
+            execution_mode: &mut self.execution_mode,
+            instruction_pointer: &mut self.instruction_pointer,
+        };
+        
+        let result = evaluator.step();
+
+        let buffer = evaluator.compiled_code.buffer;
+        self.compiled_code.restore(buffer);
+
+        return result;
     }
 }
 

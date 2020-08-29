@@ -50,8 +50,7 @@ fn read_null_terminated_string(debug_target: debugger::DebugTarget, mut address:
     }
 }
 
-fn read_from_address(debug_target: debugger::DebugTarget, address: environment::memory::Address, format: &str) -> String {
-    // check if starts with H and then add the format in
+fn read_from_address(debug_target: debugger::DebugTarget, address: environment::memory::Address, format: &str) -> String {    
     match format {
         "I" => stringify_execution_token(&debug_target, debug_target.memory.read(address)),
         "N" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Number>(address)),
