@@ -29,11 +29,13 @@ pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     };
     let nametag = match state.definitions.get_nametag(&name) {
         Some(nametag) => nametag,
-        None => return Result::Err(evaluate::Error::UnknownWord)
+        None => return Result::Err(evaluate::Error::InvalidWord)
     };
 
     state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
+        println!("name == {}", name);
         let number = pop_or_underflow!(state.stack, generic_numbers::Number);
+        println!("popped off {}", number);
         state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
         Result::Ok(())
     })).value());

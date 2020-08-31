@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use forth::{Forth, output_stream, debugger};
+use forth::{Forth, output_stream, kernels, debugger};
 
 
 /**
@@ -51,8 +51,12 @@ impl output_stream::OutputStream for StdoutStream {
 }
 
 fn main() {
-    let mut forth = Forth::new(StdoutStream::new());
-    forth.add_operations(vec![("DEBUG", false, debugger::debug)]);
-    let result = forth.eval_stream(StdinStream::new());
+    let mut output_stream = StdoutStream::new();
+    let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new();
+    forth.state.add_operations(vec![
+        ("DEBUG", false, debugger::debug)
+    ]);
+    // forth.add_operations(vec![("DEBUG", false, debugger::debug)]);
+    let result = forth.evaluate_stream(StdinStream::new(), &mut output_stream);
     println!("Finished evaluating: {:?}", result);
 }

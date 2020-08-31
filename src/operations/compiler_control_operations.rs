@@ -30,8 +30,8 @@ pub fn end_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::F
 pub fn postpone(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let token = get_token!(state);
     let definition = match state.definitions.get_from_token(token) {
-        Some(definition) => definition,
-        None => return Result::Err(evaluate::Error::UnknownWord)
+        Ok(definition) => definition,
+        error => return error.map(|_|())
     };
 
     let xt = if definition.immediate {
@@ -63,14 +63,14 @@ pub fn execute(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
 pub fn read_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.input_stream
         .next().ok_or(evaluate::Error::NoMoreTokens)
-        .and_then(|token| state.definitions.get_from_token(token).ok_or(evaluate::Error::UnknownWord))
+        .and_then(|token| state.definitions.get_from_token(token))
         .map(|definition| state.stack.push(definition.execution_token))       
 }
 
 pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.input_stream
         .next().ok_or(evaluate::Error::NoMoreTokens)
-        .and_then(|token| state.definitions.get_from_token(token).ok_or(evaluate::Error::UnknownWord))
+        .and_then(|token| state.definitions.get_from_token(token))
         .map(|definition| {
             let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(definition.execution_token.value()));
             state.memory.push(xt.value());

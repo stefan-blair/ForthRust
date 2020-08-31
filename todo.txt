@@ -1,6 +1,14 @@
+make each Kernel's `new` take in the state itself, so that DebugKernel can add the debug instruction to it
+figure out some way to get configuration parameters into the kernels
+make the kernels have an additional, optional message to attempt to handle errors
+
+measure performance differences between kernel as function pointer vector and as templates
+make the DefaultKernel thing not necessary to specify
+
 Make the debugger into an optional feature
 Check if starts with H and then add the format in
 Make the debugger able to set breakpoints and step
 
 the DOES command might break... because it does execute().and_then(execute), but now execute only does one instruction at a time!
 
+refactor Addresses

@@ -1,46 +1,81 @@
-use crate::evaluate::{self, definition};
-use crate::environment::{stack, memory};
+use std::collections::HashMap;
+
+use crate::evaluate::{self, definition, kernels};
+use crate::environment::{memory};
 
 use super::debug_operations;
 
 
-#[derive(Clone, Copy)]
-pub(super) struct DebugTarget<'a> {
-    pub definitions: &'a definition::DefinitionSet,
-
-    pub return_stack: &'a stack::Stack,
-    pub stack: &'a stack::Stack,
-    pub memory: &'a memory::Memory,
-
-    pub instruction_pointer: &'a Option<memory::Address>,
-    pub execution_mode: &'a evaluate::ExecutionMode,
+pub struct DebugState<'a> {
+    pub stepping: bool,
+    pub breakpoints: Vec<memory::Address>,
+    pub forth: evaluate::Forth<'a, kernels::DefaultKernel>,
+    pub debug_operations: HashMap<String, debug_operations::DebugOperation>,
 }
 
-pub fn debug(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let debug_target = DebugTarget {
-        definitions: state.definitions,
-        return_stack: state.return_stack,
-        stack: state.stack,
-        memory: state.memory,
-        instruction_pointer: state.instruction_pointer,
-        execution_mode: state.execution_mode
-    };
-
-    // add an operation to exit the debugger
-    let mut debug_state = evaluate::ForthState::new()
-        .with_operations(vec![("END", false, |_| Err(evaluate::Error::TokenStreamEmpty))]);
-
-    // add in the remainder of the debug operations
-    for (name, operation) in debug_operations::DEBUG_OPERATIONS.iter() {
-        let xt = debug_state.compiled_code.add(Box::new(move |state| Ok(operation(state, debug_target))));
-        debug_state.definitions.add(name.to_string(), evaluate::definition::Definition::new(xt, false));
+impl <'a> DebugState<'a> {
+    fn new() -> Self {
+        Self {
+            stepping: false,
+            breakpoints: Vec::new(),
+            forth: evaluate::Forth::<kernels::DefaultKernel>::new(),
+            debug_operations: debug_operations::DEBUG_OPERATIONS.iter().map(|(s, o)| (s.to_string(), *o)).collect()
+        }
     }
 
-    state.output_stream.writeln("Debugging.  Use the END command to resume execution.");
-    // borrow the io streams from the debugged state and run the debugger
-    debug_state.evaluate(state.input_stream, state.output_stream)
+    fn debug(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+        let input_stream = io.input_stream;
+        let output_stream = io.output_stream;
+        loop {
+            let result = match self.forth.evaluate(input_stream, output_stream) {
+                Result::Err(evaluate::Error::UnknownWord(name)) => match self.debug_operations.get(&name).ok_or(evaluate::Error::UnknownWord(name)) {
+                    Ok(op) => Ok(op(self, state, evaluate::ForthIO { input_stream, output_stream })),
+                    error => error.map(|_|())
+                }
+                result => result
+            };
+
+            if let Result::Err(_) = result {
+                break;
+            }
+        }
+    }    
 }
 
-/*
-write an operation for breakpoints
-*/
+pub struct DebugKernel<'a, NK: kernels::Kernel> {
+    debug_state: DebugState<'a>,
+    next_kernel: NK
+}
+
+impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
+    type NextKernel = NK;
+    fn new() -> Self {
+        Self {
+            debug_state: DebugState::new(),
+            next_kernel: NK::new()
+        }
+    }
+
+    fn get_next_kernel(&mut self) -> &mut Self::NextKernel { &mut self.next_kernel }
+
+    fn evaluate(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO) -> evaluate::ForthResult {
+        let hit_breakpoint = state.instruction_pointer
+            .and_then(|instruction_pointer| self.debug_state.breakpoints.iter().find(|addr| **addr == instruction_pointer));
+        if let Some(breakpoint) = hit_breakpoint {
+            io.output_stream.writeln(&format!("Hit breakpoint at {:#x}", breakpoint.to_offset()));
+            self.debug_state.debug(state, io);
+        } else if self.debug_state.stepping {
+            io.output_stream.writeln("stepped");
+            self.debug_state.debug(state, io);
+        } else if let Some(true) = state.current_instruction.map(|current_instruction| current_instruction.to_offset() == DEBUG_OPERATION_XT.to_offset()) {
+            // checking if the current instruction being executed is the DEBUG operation.  hook, and start debugging from there
+            io.output_stream.writeln("Now debugging Forth process");
+            self.debug_state.debug(state, io);
+        }
+
+        Ok(())
+    }
+}
+
+const DEBUG_OPERATION_XT: definition::ExecutionToken = definition::ExecutionToken::Operation(debug);
+pub fn debug(_: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { Ok(()) }

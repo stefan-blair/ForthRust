@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::environment::{memory, generic_numbers, stack, value};
 use crate::operations;
 use crate::io::tokens;
+use super::Error;
 
 
 #[derive(Clone, Copy)]
@@ -92,10 +93,10 @@ impl DefinitionSet {
         }
     }
     
-    pub fn get_from_token(&self, token: tokens::Token) -> Option<Definition> {
+    pub fn get_from_token(&self, token: tokens::Token) -> Result<Definition, Error> {
         match token {
-            tokens::Token::Integer(i) => Some(Definition::new(ExecutionToken::Number(i), false)),
-            tokens::Token::Name(name) => self.nametag_map.get(&name).map(|nametag| self.get(*nametag))
+            tokens::Token::Integer(i) => Ok(Definition::new(ExecutionToken::Number(i), false)),
+            tokens::Token::Name(name) => self.nametag_map.get(&name).map(|nametag| self.get(*nametag)).ok_or(Error::UnknownWord(name))
         }
     }
 

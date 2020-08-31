@@ -11,7 +11,7 @@ fn stringify_address(addr: environment::memory::Address) -> String {
     format!("{:#x}", addr.to_offset())
 }
 
-fn stringify_execution_token(debug_target: &debugger::DebugTarget, xt: evaluate::definition::ExecutionToken) -> String {
+fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evaluate::definition::ExecutionToken) -> String {
     let name = match debug_target.definitions.debug_only_get_name(xt) {
         Some(name) => format!("{} ", name),
         None => "".to_string()
@@ -25,7 +25,7 @@ fn stringify_execution_token(debug_target: &debugger::DebugTarget, xt: evaluate:
     }
 }
 
-fn read_length_string_at(debug_target: debugger::DebugTarget, mut address: environment::memory::Address) -> String {
+fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
     let length: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address);
     let mut buffer = String::new();
     for _ in 0..length {
@@ -36,7 +36,7 @@ fn read_length_string_at(debug_target: debugger::DebugTarget, mut address: envir
     buffer
 }
 
-fn read_null_terminated_string(debug_target: debugger::DebugTarget, mut address: environment::memory::Address) -> String {
+fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
     let mut buffer = String::new();
     loop {
         let byte: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address);
@@ -50,7 +50,7 @@ fn read_null_terminated_string(debug_target: debugger::DebugTarget, mut address:
     }
 }
 
-fn read_from_address(debug_target: debugger::DebugTarget, address: environment::memory::Address, format: &str) -> String {    
+fn read_from_address(debug_target: &evaluate::ForthState, address: environment::memory::Address, format: &str) -> String {    
     match format {
         "I" => stringify_execution_token(&debug_target, debug_target.memory.read(address)),
         "N" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Number>(address)),
@@ -65,11 +65,11 @@ fn read_from_address(debug_target: debugger::DebugTarget, address: environment::
     }
 }
 
-fn print_stack_formatted(state: &mut evaluate::ForthEvaluator, debug_target: debugger::DebugTarget, values: &[environment::value::Value]) {
+fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[environment::value::Value], io: evaluate::ForthIO) {
     for (i, value) in values.iter().enumerate() {
         match value {
-            environment::value::Value::Number(number) => state.output_stream.writeln(&format!("{:#10x} | {}", i, number)),
-            environment::value::Value::ExecutionToken(xt) => state.output_stream.writeln(&format!("{:#10x} | {}", i, stringify_execution_token(&debug_target, *xt)))
+            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:#10x} | {}", i, number)),
+            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:#10x} | {}", i, stringify_execution_token(&debug_target, *xt)))
         }
     }
 }
@@ -77,37 +77,37 @@ fn print_stack_formatted(state: &mut evaluate::ForthEvaluator, debug_target: deb
 /**
  * Debug operations.
  */
-pub(in super) fn view_stack(debugger_state: &mut evaluate::ForthEvaluator, debug_target: debugger::DebugTarget) {
-    print_stack_formatted(debugger_state, debug_target, debug_target.stack.debug_only_get_vec())
+pub(in super) fn view_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    print_stack_formatted(debug_target, debug_target.stack.debug_only_get_vec(), io)
 }
 
-pub(in super) fn view_return_stack(debugger_state: &mut evaluate::ForthEvaluator, debug_target: debugger::DebugTarget) {
-    print_stack_formatted(debugger_state, debug_target, debug_target.return_stack.debug_only_get_vec())
+pub(in super) fn view_return_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    print_stack_formatted(debug_target, debug_target.return_stack.debug_only_get_vec(), io)
 }
 
-pub(in super) fn view_memory(debugger_state: &mut evaluate::ForthEvaluator, debug_target: debugger::DebugTarget) {
+pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
     for (i, value) in debug_target.memory.debug_only_get_vec().iter().enumerate() {
         let name = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::DefinedOperation(debug_target.memory.address_from_cell(i as environment::generic_numbers::Number).unwrap())) {
             Some(name) => format!("\t\t\t: definition of {}", name),
             None => "".to_string()
         };
         match value {
-            environment::value::Value::Number(number) => debugger_state.output_stream.writeln(&format!("{:#10x} | {} {}", i, number, name)),
-            environment::value::Value::ExecutionToken(xt) => debugger_state.output_stream.writeln(&format!("{:#10x} | {} {}", i, stringify_execution_token(&debug_target, *xt), name))
+            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:#10x} | {} {}", i, number, name)),
+            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:#10x} | {} {}", i, stringify_execution_token(&debug_target, *xt), name))
         }
     }
 }
 
-pub(in super) fn examine_memory(debugger_state: &mut evaluate::ForthEvaluator, debug_target: debugger::DebugTarget) {
-    let address = debug_target.memory.address_from(debugger_state.stack.pop().unwrap()).unwrap();
-    let format = match debugger_state.input_stream.next() {
+pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    let address = debug_target.memory.address_from(debugger_state.forth.state.stack.pop().unwrap()).unwrap();
+    let format = match io.input_stream.next() {
         Some(io::tokens::Token::Name(format)) => format,
         _ => return
     };
-    debugger_state.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
+    io.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
 }
 
-pub(in super) type DebugOperation = fn(debugger_state: &mut evaluate::ForthEvaluator, debug_target: debugger::DebugTarget);
+pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO);
 
 pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
     ("STACK", view_stack),
