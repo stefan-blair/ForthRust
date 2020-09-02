@@ -7,8 +7,10 @@ use super::debug_operations;
 
 
 pub struct DebugState<'a> {
+    pub debugging: bool,
     pub stepping: bool,
     pub breakpoints: Vec<memory::Address>,
+    pub current_error: Option<evaluate::Error>,
     pub forth: evaluate::Forth<'a, kernels::DefaultKernel>,
     pub debug_operations: HashMap<String, debug_operations::DebugOperation>,
 }
@@ -16,17 +18,24 @@ pub struct DebugState<'a> {
 impl <'a> DebugState<'a> {
     fn new() -> Self {
         Self {
+            debugging: false,
             stepping: false,
             breakpoints: Vec::new(),
+            current_error: None,
             forth: evaluate::Forth::<kernels::DefaultKernel>::new(),
             debug_operations: debug_operations::DEBUG_OPERATIONS.iter().map(|(s, o)| (s.to_string(), *o)).collect()
         }
     }
 
     fn debug(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+        // initially display the state of execution
         let input_stream = io.input_stream;
         let output_stream = io.output_stream;
-        loop {
+        debug_operations::view_state(self, state, evaluate::ForthIO { input_stream, output_stream });
+
+        // await and execute debug commands
+        self.debugging = true;
+        while self.debugging {
             let result = match self.forth.evaluate(input_stream, output_stream) {
                 Result::Err(evaluate::Error::UnknownWord(name)) => match self.debug_operations.get(&name).ok_or(evaluate::Error::UnknownWord(name)) {
                     Ok(op) => Ok(op(self, state, evaluate::ForthIO { input_stream, output_stream })),
@@ -49,10 +58,14 @@ pub struct DebugKernel<'a, NK: kernels::Kernel> {
 
 impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
     type NextKernel = NK;
-    fn new() -> Self {
+    fn new(state: &mut evaluate::ForthState) -> Self {
+        state.add_operations(vec![
+            ("DEBUG", false, debug)
+        ]);
+            
         Self {
             debug_state: DebugState::new(),
-            next_kernel: NK::new()
+            next_kernel: NK::new(state)
         }
     }
 
@@ -60,20 +73,36 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
 
     fn evaluate(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO) -> evaluate::ForthResult {
         let hit_breakpoint = state.instruction_pointer
+            // .map(|instruction_pointer| instruction_pointer.minus_cell(1))
             .and_then(|instruction_pointer| self.debug_state.breakpoints.iter().find(|addr| **addr == instruction_pointer));
         if let Some(breakpoint) = hit_breakpoint {
             io.output_stream.writeln(&format!("Hit breakpoint at {:#x}", breakpoint.to_offset()));
             self.debug_state.debug(state, io);
         } else if self.debug_state.stepping {
-            io.output_stream.writeln("stepped");
+            io.output_stream.writeln("Stepped");
             self.debug_state.debug(state, io);
         } else if let Some(true) = state.current_instruction.map(|current_instruction| current_instruction.to_offset() == DEBUG_OPERATION_XT.to_offset()) {
             // checking if the current instruction being executed is the DEBUG operation.  hook, and start debugging from there
             io.output_stream.writeln("Now debugging Forth process");
+            // println!("Now debugging Forth process");
             self.debug_state.debug(state, io);
         }
 
         Ok(())
+    }
+
+    fn handle_error(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 
+        match error {
+            evaluate::Error::TokenStreamEmpty | evaluate::Error::Halt => return Err(error),
+            _ => ()
+        }
+
+        self.debug_state.current_error = Some(error);
+        self.debug_state.debug(state, io);
+        match self.debug_state.current_error.take() {
+            Some(error) => Err(error),
+            None => Ok(())
+        }
     }
 }
 

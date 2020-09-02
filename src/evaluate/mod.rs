@@ -45,10 +45,9 @@ pub struct Forth<'a, KERNEL: kernels::Kernel> {
 
 impl<'a, KERNEL: kernels::Kernel> Forth<'a, KERNEL> {
     pub fn new() -> Self {
-        let mut forth_machine = Self {
-            state: ForthState::new(),
-            kernel: KERNEL::new()
-        };
+        let mut state = ForthState::new();
+        let kernel = KERNEL::new(&mut state);
+        let mut forth_machine = Self { state, kernel };
 
         let mut dummy_output = output_stream::DropOutputStream::new();
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
@@ -69,18 +68,17 @@ impl<'a, KERNEL: kernels::Kernel> Forth<'a, KERNEL> {
 
     pub fn evaluate<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {    
         loop {
-            let forth_io = ForthIO { input_stream, output_stream };
-            match self.kernel.evaluate_chain(&mut self.state, forth_io).and_then(|_| self.state.step(input_stream, output_stream)){
-                Err(Error::TokenStreamEmpty) => break,
+            match self.kernel.evaluate_chain(&mut self.state, ForthIO { input_stream, output_stream })
+                    .and_then(|_| self.state.step(input_stream, output_stream)) 
+                    .or_else(|error| self.kernel.handle_error_chain(&mut self.state, ForthIO { input_stream, output_stream }, error)) {
+                Err(Error::TokenStreamEmpty) | Err(Error::Halt) => break,
                 Err(error) => {
                     println!("error = {:?}", error);
                     return Err(error)
                 },
                 Ok(_) => ()
             }
-            println!(" stack == {:?}", self.state.stack.debug_only_get_vec().iter().map(|x| x.to_number()).collect::<Vec<_>>());
         }
-        println!("ok stack == {:?}", self.state.stack.debug_only_get_vec().iter().map(|x| x.to_number()).collect::<Vec<_>>());
         Ok(())
     }
 }
@@ -131,8 +129,8 @@ impl<'a> ForthState<'a> {
         self
     }
 
-    fn step<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {
-        let mut evaluator = ForthEvaluator {
+    fn get_evaluator<'f, 't, 'i, 'o>(&'f mut self, input_stream: &'i mut tokens::TokenStream<'t>, output_stream: &'o mut dyn output_stream::OutputStream) -> ForthEvaluator<'f, 'i, 'o, 't, '_, 'a> {
+        ForthEvaluator {
             input_stream: input_stream,
             output_stream: output_stream,
 
@@ -147,7 +145,11 @@ impl<'a> ForthState<'a> {
             execution_mode: &mut self.execution_mode,
             instruction_pointer: &mut self.instruction_pointer,
             current_instruction: &mut self.current_instruction
-        };
+        }
+    }
+
+    fn step<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {
+        let mut evaluator = self.get_evaluator(input_stream, output_stream);
         
         let result = evaluator.execute_next().and_then(|_|evaluator.load_next_instruction());
 
@@ -215,7 +217,7 @@ impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     fn load_next_instruction(&mut self) -> ForthResult {
         self.instruction_pointer.ok_or(Error::InvalidAddress)
             .map(|instruction_pointer| {
-                *self.instruction_pointer = Some(instruction_pointer.plus_cell(1));
+                // load the current instruction
                 *self.current_instruction = Some(self.memory.read(instruction_pointer));
         }).or_else(|_| self.input_stream.next().ok_or(Error::TokenStreamEmpty)
             .and_then(|token| self.definitions.get_from_token(token))
@@ -229,6 +231,8 @@ impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     }
 
     fn execute_next(&mut self) -> ForthResult {
+        // increment the instruction pointer, execute the current instruction
+        *self.instruction_pointer = self.instruction_pointer.map(|ip| ip.plus_cell(1));
         match self.current_instruction.take() {
             Some(xt) => self.execute(xt),
             None => Ok(())

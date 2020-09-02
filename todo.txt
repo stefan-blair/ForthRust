@@ -1,6 +1,5 @@
-make each Kernel's `new` take in the state itself, so that DebugKernel can add the debug instruction to it
+make errors recoverable
 figure out some way to get configuration parameters into the kernels
-make the kernels have an additional, optional message to attempt to handle errors
 
 measure performance differences between kernel as function pointer vector and as templates
 make the DefaultKernel thing not necessary to specify

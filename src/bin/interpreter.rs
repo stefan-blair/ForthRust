@@ -42,7 +42,7 @@ impl StdoutStream {
 impl output_stream::OutputStream for StdoutStream {
     fn write(&mut self, m: &str) {
         print!("{}", m);
-        io::stdout().flush();
+        assert!(io::stdout().flush().is_ok());
     }
 
     fn writeln(&mut self, m: &str) {
@@ -53,10 +53,7 @@ impl output_stream::OutputStream for StdoutStream {
 fn main() {
     let mut output_stream = StdoutStream::new();
     let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new();
-    forth.state.add_operations(vec![
-        ("DEBUG", false, debugger::debug)
-    ]);
-    // forth.add_operations(vec![("DEBUG", false, debugger::debug)]);
+    forth.evaluate_string(": TEST 1 . 2 . 3 . 4 . 5 . ; debug 0xd0 set_break continue ", &mut output_stream::DropOutputStream::new());
     let result = forth.evaluate_stream(StdinStream::new(), &mut output_stream);
     println!("Finished evaluating: {:?}", result);
 }
