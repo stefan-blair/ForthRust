@@ -38,6 +38,16 @@ pub struct ForthIO<'a, 't> {
     pub output_stream: &'a mut dyn output_stream::OutputStream
 }
 
+impl<'a, 't> ForthIO<'a, 't> {
+    pub fn new(input_stream: &'a mut tokens::TokenStream<'t>, output_stream: &'a mut dyn output_stream::OutputStream) -> Self {
+        Self { input_stream, output_stream }
+    }
+
+    pub fn borrow<'b>(&'b mut self) -> ForthIO<'b, 't> {
+        ForthIO { input_stream: self.input_stream, output_stream: self.output_stream }
+    }
+}
+
 pub struct Forth<'a, KERNEL: kernels::Kernel> {
     pub state: ForthState<'a>,
     kernel: KERNEL
@@ -68,14 +78,15 @@ impl<'a, KERNEL: kernels::Kernel> Forth<'a, KERNEL> {
 
     pub fn evaluate<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {    
         loop {
-            match self.kernel.evaluate_chain(&mut self.state, ForthIO { input_stream, output_stream })
-                    .and_then(|_| self.state.step(input_stream, output_stream)) 
-                    .or_else(|error| self.kernel.handle_error_chain(&mut self.state, ForthIO { input_stream, output_stream }, error)) {
+            let mut forth_io = ForthIO::new(input_stream, output_stream);
+
+            match self.kernel.evaluate_chain(&mut self.state, forth_io.borrow())
+                    .and_then(|_| self.state.step(forth_io.input_stream, forth_io.output_stream))
+                    .or_else(|error| self.kernel.handle_error_chain(&mut self.state, forth_io.borrow(), error)) 
+                    .and_then(|_| self.state.fetch(forth_io.input_stream, forth_io.output_stream))
+                    .or_else(|error| self.kernel.handle_error_chain(&mut self.state, forth_io.borrow(), error)) {
                 Err(Error::TokenStreamEmpty) | Err(Error::Halt) => break,
-                Err(error) => {
-                    println!("error = {:?}", error);
-                    return Err(error)
-                },
+                Err(error) => return Err(error),
                 Ok(_) => ()
             }
         }
@@ -151,12 +162,16 @@ impl<'a> ForthState<'a> {
     fn step<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {
         let mut evaluator = self.get_evaluator(input_stream, output_stream);
         
-        let result = evaluator.execute_next().and_then(|_|evaluator.load_next_instruction());
+        let result = evaluator.execute_current_instruction();
 
         let buffer = evaluator.compiled_code.buffer;
         self.compiled_code.restore(buffer);
 
         return result;
+    }
+
+    fn fetch<'f, 't>(&'f mut self, input_stream: &mut tokens::TokenStream<'t>, output_stream: &mut dyn output_stream::OutputStream) -> ForthResult {
+        self.get_evaluator(input_stream, output_stream).fetch_current_instruction()
     }
 }
 
@@ -214,12 +229,12 @@ impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
         Ok(())
     }
 
-    fn load_next_instruction(&mut self) -> ForthResult {
+    fn fetch_current_instruction(&mut self) -> ForthResult {
         self.instruction_pointer.ok_or(Error::InvalidAddress)
             .map(|instruction_pointer| {
-                // load the current instruction
+                // fetch the current instruction
                 *self.current_instruction = Some(self.memory.read(instruction_pointer));
-        }).or_else(|_| self.input_stream.next().ok_or(Error::TokenStreamEmpty)
+            }).or_else(|_| self.input_stream.next().ok_or(Error::TokenStreamEmpty)
             .and_then(|token| self.definitions.get_from_token(token))
             .map(|definition| if *self.execution_mode == ExecutionMode::Compile && !definition.immediate {
                 self.memory.push(definition.execution_token.value());
@@ -230,8 +245,8 @@ impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
         )
     }
 
-    fn execute_next(&mut self) -> ForthResult {
-        // increment the instruction pointer, execute the current instruction
+    fn execute_current_instruction(&mut self) -> ForthResult {
+        // execute the current instruction, 'take'ing it so its None, and incrementing the current instruction pointer to the next position for the next iteration 
         *self.instruction_pointer = self.instruction_pointer.map(|ip| ip.plus_cell(1));
         match self.current_instruction.take() {
             Some(xt) => self.execute(xt),

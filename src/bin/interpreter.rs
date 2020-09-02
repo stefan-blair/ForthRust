@@ -53,7 +53,7 @@ impl output_stream::OutputStream for StdoutStream {
 fn main() {
     let mut output_stream = StdoutStream::new();
     let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new();
-    forth.evaluate_string(": TEST 1 . 2 . 3 . 4 . 5 . ; debug 0xd0 set_break continue ", &mut output_stream::DropOutputStream::new());
+    assert!(forth.evaluate_string(": TEST 1 . 2 . 3 . 4 . 5 . ; debug 0xd0 set_break continue ", &mut output_stream::DropOutputStream::new()).is_ok());
     let result = forth.evaluate_stream(StdinStream::new(), &mut output_stream);
     println!("Finished evaluating: {:?}", result);
 }

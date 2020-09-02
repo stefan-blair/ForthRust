@@ -37,11 +37,14 @@ impl <'a> DebugState<'a> {
         self.debugging = true;
         while self.debugging {
             let result = match self.forth.evaluate(input_stream, output_stream) {
-                Result::Err(evaluate::Error::UnknownWord(name)) => match self.debug_operations.get(&name).ok_or(evaluate::Error::UnknownWord(name)) {
+                Result::Err(evaluate::Error::UnknownWord(name)) => {
+                    match self.debug_operations.get(&name).ok_or(evaluate::Error::UnknownWord(name)) {
                     Ok(op) => Ok(op(self, state, evaluate::ForthIO { input_stream, output_stream })),
                     error => error.map(|_|())
+                }}
+                result => {
+                    result
                 }
-                result => result
             };
 
             if let Result::Err(_) = result {
@@ -76,19 +79,24 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
             // .map(|instruction_pointer| instruction_pointer.minus_cell(1))
             .and_then(|instruction_pointer| self.debug_state.breakpoints.iter().find(|addr| **addr == instruction_pointer));
         if let Some(breakpoint) = hit_breakpoint {
+            io.output_stream.writeln("");
+            io.output_stream.writeln("------------------------------------------------------");
             io.output_stream.writeln(&format!("Hit breakpoint at {:#x}", breakpoint.to_offset()));
             self.debug_state.debug(state, io);
         } else if self.debug_state.stepping {
+            io.output_stream.writeln("");
+            io.output_stream.writeln("------------------------------------------------------");
             io.output_stream.writeln("Stepped");
             self.debug_state.debug(state, io);
         } else if let Some(true) = state.current_instruction.map(|current_instruction| current_instruction.to_offset() == DEBUG_OPERATION_XT.to_offset()) {
             // checking if the current instruction being executed is the DEBUG operation.  hook, and start debugging from there
+            io.output_stream.writeln("");
+            io.output_stream.writeln("------------------------------------------------------");
             io.output_stream.writeln("Now debugging Forth process");
-            // println!("Now debugging Forth process");
             self.debug_state.debug(state, io);
         }
 
-        Ok(())
+        self.debug_state.current_error.take().map_or_else(|| Ok(()), |error| Err(error))
     }
 
     fn handle_error(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 

@@ -74,19 +74,10 @@ fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[environm
     }
 }
 
-/**
- * Debug operations.
- */
-pub(in super) fn view_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    print_stack_formatted(debug_target, debug_target.stack.debug_only_get_vec(), io)
-}
-
-pub(in super) fn view_return_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    print_stack_formatted(debug_target, debug_target.return_stack.debug_only_get_vec(), io)
-}
-
-pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    for (i, value) in debug_target.memory.debug_only_get_vec().iter().enumerate() {
+fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(usize, usize)>, io: evaluate::ForthIO) {
+    let memory = debug_target.memory.debug_only_get_vec();
+    let (start, end) = range.unwrap_or((0, memory.len()));
+    for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
         let current_address = debug_target.memory.address_from_cell(i as environment::generic_numbers::Number).unwrap();
         let name = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::DefinedOperation(current_address)) {
             Some(name) => format!("definition of {}", name),
@@ -99,10 +90,25 @@ pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut ev
         };
 
         match value {
-            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, number, name)),
-            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, stringify_execution_token(&debug_target, *xt), name))
+            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, number, name)),
+            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, stringify_execution_token(&debug_target, *xt), name))
         }
     }
+}
+
+/**
+ * Debug operations.
+ */
+pub(in super) fn view_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    print_stack_formatted(debug_target, debug_target.stack.debug_only_get_vec(), io)
+}
+
+pub(in super) fn view_return_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    print_stack_formatted(debug_target, debug_target.return_stack.debug_only_get_vec(), io)
+}
+
+pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    print_memory_formatted(debug_target, None, io);
 }
 
 pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
@@ -114,7 +120,7 @@ pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug
     io.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
 }
 
-pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, mut io: evaluate::ForthIO) {
     let instruction_pointer = debug_target.instruction_pointer.map(|addr| stringify_address(addr)).unwrap_or("(awaiting input)".to_string());
     let execution_mode = match debug_target.execution_mode {
         evaluate::ExecutionMode::Compile => "compiling",
@@ -123,21 +129,43 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     let current_instruction = debug_target.current_instruction.map(|xt| stringify_execution_token(debug_target, xt)).unwrap_or("(awaiting instruction)".to_string());
 
     if let Some(error) = &debugger_state.current_error {
+        io.output_stream.writeln("######################################################");
         io.output_stream.writeln(&format!("ENCOUNTERED ERROR {:?}", error));
+        io.output_stream.writeln("######################################################");
         io.output_stream.writeln("");
     }
 
-    for (name, value) in &[("instruction pointer", instruction_pointer), ("execution mode", execution_mode), ("current instruction", current_instruction)] {
-        io.output_stream.writeln(&format!("{:>10}: {}", name, value));
-    }
-
+    io.output_stream.writeln("------------------------------------------------------");
     if debugger_state.breakpoints.len() > 0 {
-        io.output_stream.write(&format!("\nbreakpoints:"));
+        io.output_stream.write(&format!("\n{:>20}:", "breakpoints"));
         for address in debugger_state.breakpoints.iter() {
             io.output_stream.write(&format!(" {}", stringify_address(*address)));
         }
         io.output_stream.writeln("");
+        io.output_stream.writeln("------------------------------------------------------");
     }
+
+    for (name, value) in &[("execution mode", execution_mode), ("current instruction", current_instruction), ("instruction pointer", instruction_pointer)] {
+        io.output_stream.writeln(&format!("{:>20}: {}", name, value));
+    }
+    
+    io.output_stream.writeln("------------------------------------------------------");
+    if let Some(instruction_pointer) = debug_target.instruction_pointer {
+        io.output_stream.writeln("memory:\n");
+        let start = if instruction_pointer.get_cell() < 3 {
+            0
+        } else {
+            instruction_pointer.get_cell() - 3
+        };
+        let end = instruction_pointer.get_cell() + 4;
+        print_memory_formatted(debug_target, Some((start, end)), io.borrow());
+        io.output_stream.writeln("------------------------------------------------------");
+    }
+
+    let stack_vec = debug_target.stack.debug_only_get_vec();
+    io.output_stream.writeln("stack:\n");
+    print_stack_formatted(debug_target, &stack_vec[..std::cmp::min(10, stack_vec.len())], io.borrow());
+    io.output_stream.writeln("------------------------------------------------------");
 }
 
 pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, _: evaluate::ForthIO) {
@@ -148,11 +176,19 @@ pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, debug_targ
 pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _: evaluate::ForthIO) {
     debugger_state.stepping = true;
     debugger_state.debugging = false;
+    debugger_state.current_error = None;
 }
 
 pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _: evaluate::ForthIO) {
     debugger_state.stepping = false;
     debugger_state.debugging = false;
+    debugger_state.current_error = None;
+}
+
+pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _:evaluate::ForthIO) {
+    debugger_state.stepping = false;
+    debugger_state.debugging = false;
+    debugger_state.current_error = debugger_state.current_error.take().or(Some(evaluate::Error::Halt));
 }
 
 pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO);
@@ -166,4 +202,5 @@ pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
     ("SET_BREAK", add_break),
     ("STEP", step),
     ("CONTINUE", do_continue),
+    ("EXIT", do_exit),
 ];
