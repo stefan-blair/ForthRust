@@ -1,19 +1,17 @@
 use super::*;
 
 use crate::get_token;
-use crate::hard_match_address;
-use crate::pop_or_underflow;
-
 
 pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = pop_address!(state.memory, state.stack);
-    state.stack.push(state.memory.read::<value::Value>(address));
+    let address = pop_or_underflow!(state.stack.pop());
+    state.stack.push(read_or_error!(state.memory.read::<value::Value>(address)));
     Result::Ok(())
 }
 
 pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let (address, value) = (pop_address!(state.memory, state.stack), pop_or_underflow!(state.stack, N));
-    state.memory.write(address, value);
+    let (address, value) = (pop_or_underflow!(state.stack.pop()), pop_or_underflow!(state.stack, N));
+
+    write_or_error!(state.memory, address, value);
     Result::Ok(())
 }
 

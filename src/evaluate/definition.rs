@@ -68,15 +68,16 @@ impl value::ValueVariant for ExecutionToken {
         })
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool{
         memory.write_value(address, self.value())
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
-        match memory.read_value(address) {
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
+        memory.read_value(address).map(|value| match value {
             value::Value::ExecutionToken(xt) => xt,
             value::Value::Number(n) => ExecutionToken::Number(n)
-        }
+
+        })
     }
 }
 

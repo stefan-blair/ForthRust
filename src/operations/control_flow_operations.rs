@@ -31,7 +31,7 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::
     }).value());
 
     // get the address of the top of the loop, and patch the conditional branch at the end of the loop
-    let loop_address = pop_address!(state.memory, state.stack);
+    let loop_address = pop_or_underflow!(state.stack.pop());
     let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(loop_address)).value();
     state.memory.push(branch_xt);
 
@@ -46,7 +46,7 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::
     
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.memory.write(loop_address.minus_cell(3), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
+    write_or_error!(state.memory, loop_address.minus_cell(3), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
 
     Result::Ok(())
 }
@@ -67,23 +67,23 @@ pub fn begin_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult
 }
 
 pub fn until_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let loop_address = pop_address!(state.memory, state.stack);
+    let loop_address = pop_or_underflow!(state.stack.pop());
     let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(loop_address)).value();
     state.memory.push(branch_xt);
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.memory.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
+    write_or_error!(state.memory, loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
 
     Result::Ok(())
 }
 
 pub fn again_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let loop_address = pop_address!(state.memory, state.stack);
+    let loop_address = pop_or_underflow!(state.stack.pop());
     let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(loop_address)).value();
     state.memory.push(branch_xt);
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.memory.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
+    write_or_error!(state.memory, loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
 
     Result::Ok(())
 }
@@ -95,26 +95,26 @@ pub fn while_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult
 }
 
 pub fn repeat_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let branch_address = pop_address!(state.memory, state.stack);
+    let branch_address = pop_or_underflow!(state.stack.pop());
 
     // add a branch instruction to the beginning of the loop unconditionally
-    let loop_address = pop_address!(state.memory, state.stack);
+    let loop_address = pop_or_underflow!(state.stack.pop());
     let branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(loop_address)).value();
     state.memory.push(branch_xt);
 
     // back patch the conditional branch in the middle of the loop
     let conditional_branch_xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(state.memory.top())).value();
-    state.memory.write(branch_address, conditional_branch_xt);
+    write_or_error!(state.memory, branch_address, conditional_branch_xt);
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.memory.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
+    write_or_error!(state.memory, loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()));
 
     Result::Ok(())
 }
 
 pub fn leave(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.return_stack.pop::<value::DoubleValue>();
-    let end_of_loop_address = pop_address!(state.memory, state.return_stack);
+    let end_of_loop_address = pop_or_underflow!(state.return_stack.pop());
     state.jump_to(end_of_loop_address)
 }
 

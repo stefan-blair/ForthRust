@@ -12,10 +12,9 @@ mod stack_operations;
 
 // import all of the macros exposed by this module for ease of use by the other operations modules
 use crate::get_two_from_stack;
-use crate::hard_match_address;
 use crate::pop_or_underflow;
-use crate::pop_address;
-use crate::match_or_error;
+use crate::read_or_error;
+use crate::write_or_error;
 use crate::peek_or_underflow;
 use crate::get_token;
 use crate::postpone;
@@ -51,14 +50,13 @@ mod helper_macros {
                 Some(v) => v,
                 None => return Result::Err(evaluate::Error::StackUnderflow)
             }
-        }
-    }
-
-    #[macro_export]
-    macro_rules! pop_address {
-        ($memory:expr, $stack:expr) => {
-            hard_match_address!($memory, pop_or_underflow!($stack, generic_numbers::Number))
         };
+        ($result:expr) => {
+            match $result {
+                Some(v) => v,
+                None => return Result::Err(evaluate::Error::StackUnderflow)
+            }
+        }
     }
 
     #[macro_export]
@@ -79,9 +77,21 @@ mod helper_macros {
     }
 
     #[macro_export]
-    macro_rules! hard_match_address {
-        ($memory:expr, $obj:expr) => {
-            match_or_error!($memory.address_from($obj), Some(address), address, evaluate::Error::InvalidAddress)
+    macro_rules! read_or_error {
+        ($result:expr) => {
+            match $result {
+                Some(v) => v,
+                None => return Result::Err(evaluate::Error::InvalidAddress)
+            }
+        }
+    }
+
+    #[macro_export]
+    macro_rules! write_or_error {
+        ($memory:expr, $address:expr, $value:expr) => {
+            if !$memory.write($address, $value) {
+                return Result::Err(evaluate::Error::InvalidAddress)
+            }
         }
     }
 

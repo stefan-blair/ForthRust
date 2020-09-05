@@ -547,31 +547,3 @@ fn print_size_test() {
     assert!(f.evaluate_string("-1 -1 UM+ D.", &mut output_stream).is_ok());
     assert_eq!("36893488147419103230 ", output_stream.consume());    
 }
-
-// pub struct ProfileKernel<T: Kernel = DefaultKernel> {
-//     add_count: u64,
-//     sub_count: u64,
-//     next_kernel: T
-// }
-// impl<T: Kernel> Kernel for ProfileKernel<T> {
-//     type NextKernel = T;
-//     fn new() -> Self { 
-//         Self {
-//             add_count: 0,
-//             sub_count: 0,
-//             next_kernel: T::new()
-//         } 
-//     }
-//     fn evaluate(&mut self, state: &mut ForthState) -> ForthResult {
-//         Ok(())
-//     }
-//     fn get_next_kernel(&mut self) -> &mut Self::NextKernel { &mut self.next_kernel }
-// }
-// #[test]
-// fn kernel_perf_test() {
-//     let mut output_stream = output_stream::BufferedOutputStream::new();
-//     let mut f = Forth::<kernels::DefaultKernel>::new();
-//     assert!(f.evaluate_string(": test 0 swap 0 DO 1 + LOOP ;", &mut output_stream).is_ok());
-//     assert!(f.evaluate_string("5000000 test", &mut output_stream).is_ok());
-//     assert_eq!(vec![5000000], stack_to_vec(&mut f.state.stack))
-// }

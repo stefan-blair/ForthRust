@@ -82,14 +82,14 @@ pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::Fo
  * Pushes the execution token of this branch instruction onto the stack.
  */
 pub fn push_branch_false_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = pop_address!(state.memory, state.stack);
+    let address = pop_or_underflow!(state.stack.pop());
     let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(address));
     state.stack.push(xt);
     Result::Ok(())            
 }
 
 pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = pop_address!(state.memory, state.stack);
+    let address = pop_or_underflow!(state.stack.pop());
     let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(address));
     state.stack.push(xt);
     Result::Ok(())            

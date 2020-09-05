@@ -19,11 +19,11 @@ pub fn print_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
 
         // there must be an instruction pointer if its literally executing this
         let mut string_address = state.instruction_pointer.unwrap();
-        let length: generic_numbers::UnsignedByte = state.memory.read(string_address);
+        let length: generic_numbers::UnsignedByte = read_or_error!(state.memory.read(string_address));
         for _ in 0..length {
             // increment the string address and read the next character
             string_address.increment();
-            let c: generic_numbers::UnsignedByte = state.memory.read(string_address);
+            let c: generic_numbers::UnsignedByte = read_or_error!(state.memory.read(string_address));
             // print the byte as a character
             state.output_stream.write(&format!("{}", c as char));
         }
@@ -47,14 +47,14 @@ pub fn print_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
                 if !string_address.less_than(state.memory.top()) {
                     state.memory.push_none();
                 }
-                state.memory.write(string_address, next_char as generic_numbers::UnsignedByte);
+                write_or_error!(state.memory, string_address, next_char as generic_numbers::UnsignedByte);
                 string_address.increment();
                 length += 1;
             },
             None => return Result::Err(evaluate::Error::NoMoreTokens)
         }
     }
-    state.memory.write(length_address, length);
+    write_or_error!(state.memory, length_address, length);
 
     
     Result::Ok(())

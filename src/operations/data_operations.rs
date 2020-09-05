@@ -6,7 +6,13 @@ use crate::postpone;
 
 
 pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.stack.push(state.memory.top().to_number()); Result::Ok(()) }
-pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.memory.expand(pop_or_underflow!(state.stack, generic_numbers::Number) as memory::Offset); Result::Ok(()) }
+
+pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
+    let total_memory = pop_or_underflow!(state.stack, generic_numbers::UnsignedNumber) as memory::Offset;
+    let cells = (total_memory + memory::CELL_SIZE - 1) / memory::CELL_SIZE;
+    state.memory.expand(cells as memory::Offset); 
+    Result::Ok(()) 
+}
 
 pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let name = match get_token!(state) {
@@ -16,7 +22,7 @@ pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
 
     let address = state.memory.top();
     state.memory.push_none();
-    let xt = state.compiled_code.add_compiled_code(Box::new(move |state| { state.stack.push(address.to_number()); Result::Ok(()) } ));
+    let xt = evaluate::definition::ExecutionToken::Number(address.to_number());
     state.definitions.add(name, evaluate::definition::Definition::new(xt, false));
 
     Result::Ok(())
@@ -58,6 +64,12 @@ pub fn value(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     Result::Ok(())
 }
 
+pub fn cells(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+    let number = pop_or_underflow!(state.stack, generic_numbers::UnsignedNumber) as memory::Offset;
+    state.stack.push((number * memory::CELL_SIZE) as generic_numbers::UnsignedNumber);
+    Ok(())
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         ("HERE", false, here),
@@ -65,5 +77,6 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("CREATE", false, create),
         ("DOES>", true, does),
         ("VALUE", false, value),
+        ("CELLS", false, cells),
     ]
 }

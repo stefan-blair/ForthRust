@@ -7,8 +7,8 @@ use crate::evaluate;
 pub trait ValueVariant: std::marker::Sized + Copy + Clone {
     fn push_to_stack(self, stack: &mut stack::Stack);
     fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self>;
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address);
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self;
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool;
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self>;
 }
 
 #[derive(Copy, Clone)]
@@ -35,11 +35,11 @@ impl ValueVariant for Value {
         stack.pop_value()
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
         memory.write_value(address, self)
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
         memory.read_value(address)
     }    
 }
@@ -60,12 +60,20 @@ impl ValueVariant for DoubleValue {
         }
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
-        memory.write(address, self.0);
-        memory.write(address.plus_cell(1), self.1);
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
+        if memory.check_address(address) && memory.check_address(address.plus_cell(1)) {
+            memory.write(address, self.0);
+            memory.write(address.plus_cell(1), self.1);
+            true    
+        } else {
+            false
+        }
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
-        DoubleValue(memory.read(address), memory.read(address.plus_cell(1)))
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
+        match (memory.read(address), memory.read(address.plus_cell(1))) {
+            (Some(a), Some(b)) => Some(DoubleValue(a, b)),
+            _ => None
+        }
     }
 }

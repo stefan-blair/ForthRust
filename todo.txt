@@ -1,3 +1,10 @@
+refactor Addresses
+remove additional thing at the top of memory
+remove all of the unwraps from Debugger
+check all Write return values are true
+
+write tests for bytes, doubles, create, allot
+
 make errors recoverable
 
 measure performance differences between kernel as function pointer vector and as templates
@@ -5,8 +12,5 @@ make the DefaultKernel thing not necessary to specify
 
 Make the debugger into an optional feature
 Check if starts with H and then add the format in
-Make the debugger able to set breakpoints and step
 
 the DOES command might break... because it does execute().and_then(execute), but now execute only does one instruction at a time!
-
-refactor Addresses

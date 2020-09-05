@@ -17,8 +17,8 @@ pub trait StackOperations<T> {
 }
 
 pub trait MemoryOperations<T> {
-    fn read_number_by_type(&self, address: memory::Address) -> T;
-    fn write_number_by_type(&mut self, address: memory::Address, value: T);
+    fn read_number_by_type(&self, address: memory::Address) -> Option<T>;
+    fn write_number_by_type(&mut self, address: memory::Address, value: T) -> bool;
 }
 
 /**
@@ -80,11 +80,11 @@ macro_rules! generic_number {
                 stack.pop_number_by_type()
             }
 
-            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
-                memory.write_number_by_type(address, self);
+            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
+                memory.write_number_by_type(address, self)
             }
 
-            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
+            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
                 memory.read_number_by_type(address)
             }
         }
@@ -117,13 +117,13 @@ macro_rules! generic_number {
                 stack.pop_number_by_type().map(|number: $name| number as $unsigned_type)
             }
 
-            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) {
+            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
                 memory.write_number_by_type(address, self as $name)
             }
 
-            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Self {
-                let number: $name = memory.read_number_by_type(address);
-                number as $unsigned_type
+            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
+                let number: Option<$name> = memory.read_number_by_type(address);
+                number.map(|n| n as $unsigned_type)
             }
         }
 

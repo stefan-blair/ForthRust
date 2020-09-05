@@ -26,11 +26,11 @@ pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evalua
 }
 
 fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
-    let length: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address);
+    let length: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address).unwrap();
     let mut buffer = String::new();
     for _ in 0..length {
         address.increment();
-        buffer.push(debug_target.memory.read::<environment::generic_numbers::UnsignedByte>(address) as char);
+        buffer.push(debug_target.memory.read::<environment::generic_numbers::UnsignedByte>(address).unwrap() as char);
     }
 
     buffer
@@ -39,7 +39,7 @@ fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: envir
 fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
     let mut buffer = String::new();
     loop {
-        let byte: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address);
+        let byte: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address).unwrap();
         if byte == 0 {
             return buffer;
         } else {
@@ -52,13 +52,14 @@ fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address:
 
 fn read_from_address(debug_target: &evaluate::ForthState, address: environment::memory::Address, format: &str) -> String {    
     match format {
-        "I" => stringify_execution_token(&debug_target, debug_target.memory.read(address)),
-        "N" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Number>(address)),
-        "D" => format!("{}", debug_target.memory.read::<environment::generic_numbers::DoubleNumber>(address)),
-        "B" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Byte>(address)),
-        "UN" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedNumber>(address)),
-        "UD" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedDoubleNumber>(address)),
-        "UB" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedByte>(address)),
+        "I" => stringify_execution_token(&debug_target, debug_target.memory.read(address).unwrap()),
+        "A" => format!("--> {}", read_from_address(debug_target, debug_target.memory.read(address).unwrap(), format)),
+        "N" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Number>(address).unwrap()),
+        "D" => format!("{}", debug_target.memory.read::<environment::generic_numbers::DoubleNumber>(address).unwrap()),
+        "B" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Byte>(address).unwrap()),
+        "UN" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedNumber>(address).unwrap()),
+        "UD" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedDoubleNumber>(address).unwrap()),
+        "UB" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedByte>(address).unwrap()),
         "LS" => read_length_string_at(debug_target, address),
         "S" => read_null_terminated_string(debug_target, address),
         _ => "Unknown format specifier".to_string()
@@ -78,7 +79,7 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(us
     let memory = debug_target.memory.debug_only_get_vec();
     let (start, end) = range.unwrap_or((0, memory.len()));
     for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
-        let current_address = debug_target.memory.address_from_cell(i as environment::generic_numbers::Number).unwrap();
+        let current_address = environment::memory::Address::debug_only_from_cell(i as environment::memory::Offset);
         let name = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::DefinedOperation(current_address)) {
             Some(name) => format!("definition of {}", name),
             None => "".to_string()
@@ -112,7 +113,7 @@ pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut ev
 }
 
 pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    let address = debug_target.memory.address_from(debugger_state.forth.state.stack.pop().unwrap()).unwrap();
+    let address = debugger_state.forth.state.stack.pop().unwrap();
     let format = match io.input_stream.next() {
         Some(io::tokens::Token::Name(format)) => format,
         _ => return
@@ -168,8 +169,8 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     io.output_stream.writeln("------------------------------------------------------");
 }
 
-pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, _: evaluate::ForthIO) {
-    let address = debug_target.memory.address_from(debugger_state.forth.state.stack.pop().unwrap()).unwrap();
+pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _: evaluate::ForthIO) {
+    let address = debugger_state.forth.state.stack.pop().unwrap();
     debugger_state.breakpoints.push(address);
 }
 
