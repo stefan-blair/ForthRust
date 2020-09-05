@@ -88,7 +88,7 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
             io.output_stream.writeln("------------------------------------------------------");
             io.output_stream.writeln("Stepped");
             self.debug_state.debug(state, io);
-        } else if let Some(true) = state.current_instruction.map(|current_instruction| current_instruction.to_offset() == DEBUG_OPERATION_XT.to_offset()) {
+        } else if let Some(true) = state.current_instruction.map(|current_instruction| current_instruction == DEBUG_OPERATION_XT) {
             // checking if the current instruction being executed is the DEBUG operation.  hook, and start debugging from there
             io.output_stream.writeln("");
             io.output_stream.writeln("------------------------------------------------------");

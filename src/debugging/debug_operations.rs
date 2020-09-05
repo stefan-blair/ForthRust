@@ -11,7 +11,7 @@ fn stringify_address(addr: environment::memory::Address) -> String {
     format!("{:#x}", addr.to_offset())
 }
 
-fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evaluate::definition::ExecutionToken) -> String {
+pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evaluate::definition::ExecutionToken) -> String {
     let name = match debug_target.definitions.debug_only_get_name(xt) {
         Some(name) => format!("{} ", name),
         None => "".to_string()

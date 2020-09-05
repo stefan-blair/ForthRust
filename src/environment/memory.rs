@@ -7,7 +7,7 @@ use super::generic_numbers::{ConvertOperations, AsValue};
 pub type ValueSize = u64;
 pub type Offset = usize;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Address(Offset);
 
 impl Address {

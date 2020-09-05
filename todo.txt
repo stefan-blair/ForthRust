@@ -1,5 +1,4 @@
 make errors recoverable
-figure out some way to get configuration parameters into the kernels
 
 measure performance differences between kernel as function pointer vector and as templates
 make the DefaultKernel thing not necessary to specify

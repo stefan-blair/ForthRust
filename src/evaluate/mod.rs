@@ -50,7 +50,7 @@ impl<'a, 't> ForthIO<'a, 't> {
 
 pub struct Forth<'a, KERNEL: kernels::Kernel> {
     pub state: ForthState<'a>,
-    kernel: KERNEL
+    pub kernel: KERNEL
 }
 
 impl<'a, KERNEL: kernels::Kernel> Forth<'a, KERNEL> {

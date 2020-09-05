@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 use crate::environment::{memory, generic_numbers, stack, value};
 use crate::operations;
@@ -28,6 +29,32 @@ impl ExecutionToken {
         value::Value::ExecutionToken(self)
     }
 }
+
+impl Hash for ExecutionToken {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let index = match self {
+            Self::Operation(_) => 0,
+            Self::CompiledOperation(_) => 1,
+            Self::DefinedOperation(_) => 2,
+            Self::Number(_) => 3,
+        };
+        index.hash(state);
+        self.to_offset().hash(state);
+    }
+}
+
+impl PartialEq for ExecutionToken {
+    fn eq(&self, other: &Self) -> bool {
+        match (*self, *other) {
+            (Self::Operation(op_1), Self::Operation(op_2)) => (op_1 as usize) == (op_2 as usize),
+            (Self::CompiledOperation(offset_1), Self::CompiledOperation(offset_2)) => offset_1 == offset_2,
+            (Self::DefinedOperation(address_1), Self::DefinedOperation(address_2)) => address_1 == address_2,
+            (Self::Number(i), Self::Number(j)) => i == j,
+            _ => false
+        }
+    }
+}
+impl Eq for ExecutionToken {}
 
 impl value::ValueVariant for ExecutionToken {
     fn push_to_stack(self, stack: &mut stack::Stack) {
