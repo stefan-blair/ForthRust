@@ -194,5 +194,5 @@ pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     ": ELSE POSTPONE 0 HERE 1 ALLOT SWAP HERE _BNE SWAP ! ; IMMEDIATE",
     ": THEN HERE _BNE SWAP ! ; IMMEDIATE",
     // get current index of do ... loop
-    ": I R> R@ SWAP >R ;"
+    ": I R> R@ SWAP >R ;",
 ];

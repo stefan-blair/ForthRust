@@ -19,6 +19,7 @@ pub trait StackOperations<T> {
 pub trait MemoryOperations<T> {
     fn read_number_by_type(&self, address: memory::Address) -> Option<T>;
     fn write_number_by_type(&mut self, address: memory::Address, value: T) -> bool;
+    fn push_number_by_type(&mut self, value: T);
 }
 
 /**
@@ -87,6 +88,14 @@ macro_rules! generic_number {
             fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
                 memory.read_number_by_type(address)
             }
+
+            fn push_to_memory(self, memory: &mut memory::Memory) {
+                memory.push_number_by_type(self)
+            }
+
+            fn null() -> Self {
+                0
+            }
         }
     };
 
@@ -124,6 +133,14 @@ macro_rules! generic_number {
             fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
                 let number: Option<$name> = memory.read_number_by_type(address);
                 number.map(|n| n as $unsigned_type)
+            }
+
+            fn push_to_memory(self, memory: &mut memory::Memory) {
+                memory.push_number_by_type(self as $name)
+            }
+
+            fn null() -> Self {
+                0
             }
         }
 

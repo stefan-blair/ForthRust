@@ -9,6 +9,8 @@ pub trait ValueVariant: std::marker::Sized + Copy + Clone {
     fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self>;
     fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool;
     fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self>;
+    fn push_to_memory(self, memory: &mut memory::Memory);
+    fn null() -> Self;
 }
 
 #[derive(Copy, Clone)]
@@ -41,7 +43,15 @@ impl ValueVariant for Value {
 
     fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
         memory.read_value(address)
-    }    
+    }
+
+    fn push_to_memory(self, memory: &mut memory::Memory) {
+        memory.push_value(self)
+    }
+
+    fn null() -> Self {
+        Self::Number(0)
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -75,5 +85,14 @@ impl ValueVariant for DoubleValue {
             (Some(a), Some(b)) => Some(DoubleValue(a, b)),
             _ => None
         }
+    }
+
+    fn push_to_memory(self, memory: &mut memory::Memory) {
+        memory.push(self.0);
+        memory.push(self.1);
+    }
+
+    fn null() -> Self {
+        Self(Value::null(), Value::null())
     }
 }

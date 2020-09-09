@@ -75,14 +75,31 @@ fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[environm
     }
 }
 
+fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String, environment::memory::Address)> {
+    debug_target.definitions.debug_only_get_nametag_map().iter()
+        .map(|(name, nametag)| (name, debug_target.definitions.get(*nametag).execution_token))
+        .filter_map(|(name, execution_token)| match execution_token { 
+            evaluate::definition::ExecutionToken::Number(addr) => Some((name, environment::memory::Address::debug_only_from_offset(addr as environment::memory::Offset))),
+            _ => None
+        }).collect::<Vec<_>>()
+}
+
 fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(usize, usize)>, io: evaluate::ForthIO) {
     let memory = debug_target.memory.debug_only_get_vec();
+    let variables = get_variables(debug_target);
     let (start, end) = range.unwrap_or((0, memory.len()));
     for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
         let current_address = environment::memory::Address::debug_only_from_cell(i as environment::memory::Offset);
         let name = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::DefinedOperation(current_address)) {
             Some(name) => format!("definition of {}", name),
-            None => "".to_string()
+            None => match variables.iter().filter_map(|(name, addr)| if *addr == current_address {
+                Some(name)
+            } else {
+                None
+            }).next() {
+                Some(name) => format!("memory of {}", name),
+                None => "".to_string()
+            }
         };
         let is_instruction_pointer = if Some(current_address) == debug_target.instruction_pointer {
             " ip -> "
@@ -169,24 +186,41 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     io.output_stream.writeln("------------------------------------------------------");
 }
 
-pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _: evaluate::ForthIO) {
-    let address = debugger_state.forth.state.stack.pop().unwrap();
-    debugger_state.breakpoints.push(address);
+pub(in super) fn all_commands(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    for (name, nametag) in debug_target.definitions.debug_only_get_nametag_map().iter() {
+        let definition = debug_target.definitions.get(*nametag);
+        let immediate_string = if definition.immediate {
+            "immediate"
+        } else {
+            ""
+        };
+
+        io.output_stream.writeln(&format!("{:<15}: {:<10} {}", name, immediate_string, stringify_execution_token(debug_target, definition.execution_token)))
+    }
 }
 
-pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _: evaluate::ForthIO) {
+pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    let address = debugger_state.forth.state.stack.pop().unwrap();
+    debugger_state.breakpoints.push(address);
+    io.output_stream.writeln(&format!("Set breakpoint @ {}", stringify_address(address)));
+}
+
+pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    io.output_stream.writeln("Stepping...");
     debugger_state.stepping = true;
     debugger_state.debugging = false;
     debugger_state.current_error = None;
 }
 
-pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _: evaluate::ForthIO) {
+pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+    io.output_stream.writeln("Continuing");
     debugger_state.stepping = false;
     debugger_state.debugging = false;
     debugger_state.current_error = None;
 }
 
-pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, _:evaluate::ForthIO) {
+pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io:evaluate::ForthIO) {
+    io.output_stream.writeln("Exiting...");
     debugger_state.stepping = false;
     debugger_state.debugging = false;
     debugger_state.current_error = debugger_state.current_error.take().or(Some(evaluate::Error::Halt));
@@ -200,6 +234,7 @@ pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
     ("MEMORY", view_memory),
     ("X", examine_memory),
     ("STATE", view_state),
+    ("ALL_COMMANDS", all_commands),
     ("SET_BREAK", add_break),
     ("STEP", step),
     ("CONTINUE", do_continue),

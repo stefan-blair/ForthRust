@@ -17,6 +17,10 @@ impl Address {
         Self(offset)
     }
 
+    pub fn debug_only_from_offset(offset: Offset) -> Self {
+        Self(offset)
+    }
+
     pub fn debug_only_from_cell(offset: Offset) -> Self {
         Self(offset * CELL_SIZE)
     }
@@ -85,7 +89,15 @@ impl ValueVariant for Address {
 
     fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
         memory.read(address).map(|number: generic_numbers::Number| Self::from_offset(number as Offset))
-    }  
+    }
+
+    fn push_to_memory(self, memory: &mut memory::Memory) {
+        memory.push(self.to_number())
+    }
+
+    fn null() -> Self {
+        Self::from_offset(0)
+    }
 }
 
 pub struct Memory(Vec<value::Value>);
@@ -104,12 +116,6 @@ impl Memory {
     }
 
     pub fn push_none(&mut self) {
-        self.0.push(0.value());
-    }
-
-    pub fn push(&mut self, value: value::Value) {
-        self.0.pop();
-        self.0.push(value);
         self.0.push(0.value());
     }
 
@@ -134,12 +140,23 @@ impl Memory {
         }
     }
 
+    pub fn push_value(&mut self, value: value::Value) {
+        self.0.pop();
+        self.0.push(value);
+        self.0.push(0.value());
+    }
+
     pub fn write<T: value::ValueVariant>(&mut self, address: Address, number: T) -> bool {
         number.write_to_memory(self, address)
     }
 
     pub fn read<T: value::ValueVariant>(&self, address: Address) -> Option<T> {
         T::read_from_memory(self, address)
+    }
+
+    
+    pub fn push<T: value::ValueVariant>(&mut self, value: T) {
+        value.push_to_memory(self);
     }
 
     pub fn debug_only_get_vec<'a>(&'a self) -> &'a Vec<value::Value> {
@@ -161,6 +178,10 @@ impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {
             false
         }
     }
+
+    fn push_number_by_type(&mut self, byte: generic_numbers::Byte) {
+        self.push_value(generic_numbers::Number::from_chunks(&[byte]).value())
+    }
 }
 
 impl generic_numbers::MemoryOperations<generic_numbers::Number> for Memory {
@@ -170,6 +191,10 @@ impl generic_numbers::MemoryOperations<generic_numbers::Number> for Memory {
 
     fn write_number_by_type(&mut self, address: Address, number: generic_numbers::Number) -> bool {
         self.write_value(address, number.value())
+    }
+
+    fn push_number_by_type(&mut self, number: generic_numbers::Number) {
+        self.push_value(number.value())
     }
 }
 
@@ -200,5 +225,9 @@ impl generic_numbers::MemoryOperations<generic_numbers::DoubleNumber> for Memory
         }
 
         return true
+    }
+
+    fn push_number_by_type(&mut self, double_number: generic_numbers::DoubleNumber) {
+        double_number.to_chunks().iter().for_each(|c| self.push_value(c.value()))
     }
 }

@@ -79,6 +79,14 @@ impl value::ValueVariant for ExecutionToken {
 
         })
     }
+
+    fn push_to_memory(self, memory: &mut memory::Memory) {
+        memory.push_value(self.value())
+    }
+
+    fn null() -> Self {
+        Self::Number(0)
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -132,10 +140,6 @@ impl DefinitionSet {
         self.definitions[nametag.to_offset()]
     }
 
-    pub fn _get_from_name(&self, name: &str) -> Definition {
-        self.get(*self.nametag_map.get(name).unwrap())
-    }
-
     pub fn get_nametag(&self, name: &str) -> Option<NameTag> {
         self.nametag_map.get(name).map(|x| *x)
     }
@@ -158,7 +162,7 @@ impl DefinitionSet {
         nametag
     }
 
-    pub fn get_most_recent(&self) -> NameTag {
+    pub fn get_most_recent_nametag(&self) -> NameTag {
         self.most_recent
     }
 
@@ -180,5 +184,9 @@ impl DefinitionSet {
         }
 
         None
+    }
+
+    pub fn debug_only_get_nametag_map(&self) -> &HashMap<String, NameTag> {
+        return &self.nametag_map;
     }
 }

@@ -3,7 +3,7 @@ use super::*;
 use crate::absorb_comment;
 
 
-pub fn immedate(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.definitions.make_immediate(state.definitions.get_most_recent()); Result::Ok(()) }
+pub fn immedate(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.definitions.make_immediate(state.definitions.get_most_recent_nametag()); Result::Ok(()) }
 pub fn set_interpret(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.set_interpretmode() }
 pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.set_compilemode() }
 
