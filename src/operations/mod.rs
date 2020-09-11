@@ -1,14 +1,15 @@
 use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
-use crate::evaluate;
+use crate::evaluate::{self, ForthResult, Error, ForthEvaluator};
 use crate::io;
 
+pub mod control_flow_operations;
 mod arithmetic_operations;
 mod compiler_control_operations;
-mod control_flow_operations;
 mod data_operations;
 mod memory_operations;
 mod print_operations;
 mod stack_operations;
+mod string_operations;
 
 // import all of the macros exposed by this module for ease of use by the other operations modules
 use crate::get_two_from_stack;
@@ -116,8 +117,8 @@ mod helper_macros {
     macro_rules! absorb_comment {
         ($closing_brace:expr) => {
             |state| {
-                while let Some(io::tokens::Token::Name(name)) = state.input_stream.next() {
-                    if name == $closing_brace {
+                while let Some(c) = state.input_stream.next_char() {
+                    if c == $closing_brace {
                         return Result::Ok(());
                     }
                 }
@@ -180,6 +181,7 @@ pub fn get_operations() -> OperationTable {
         control_flow_operations::get_operations(),
         compiler_control_operations::get_operations(),
         print_operations::get_operations(),
+        string_operations::get_operations(),
     ].into_iter().flatten().collect::<Vec<_>>()
 }
 
@@ -195,4 +197,9 @@ pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     ": THEN HERE _BNE SWAP ! ; IMMEDIATE",
     // get current index of do ... loop
     ": I R> R@ SWAP >R ;",
+    // get next character
+    ": [CHAR] CHAR POSTPONE LITERAL ; IMMEDIATE",
+    // some increment instructions
+    ": CELL+ 1 CELLS + ;",
+    ": 1+ 1 + ;"
 ];

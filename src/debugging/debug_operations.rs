@@ -2,6 +2,7 @@ use crate::io;
 use crate::evaluate;
 use crate::environment;
 use super::debugger;
+use crate::operations;
 
 
 /**
@@ -226,6 +227,27 @@ pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut eval
     debugger_state.current_error = debugger_state.current_error.take().or(Some(evaluate::Error::Halt));
 }
 
+pub(in super) fn see(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io:evaluate::ForthIO) {
+    let definition = match debug_target.definitions.get_from_token(io.input_stream.next().unwrap()) {
+        Ok(definition) => definition,
+        _ => return io.output_stream.writeln("No definition found")
+    };
+
+    io.output_stream.writeln(&stringify_execution_token(debug_target, definition.execution_token));
+    if let evaluate::definition::ExecutionToken::DefinedOperation(address) = definition.execution_token {
+        let mut end = address;
+        while {
+            end.increment_cell();
+            let break_operation = evaluate::definition::ExecutionToken::Operation(operations::control_flow_operations::control_flow_break);
+            let current_operation = debug_target.memory.read::<evaluate::definition::ExecutionToken>(end).unwrap();
+            break_operation != current_operation
+        } {}
+        end.increment_cell();
+
+        print_memory_formatted(debug_target, Some((address.get_cell(), end.get_cell())), io);
+    }
+}
+
 pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO);
 
 pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
@@ -239,4 +261,5 @@ pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
     ("STEP", step),
     ("CONTINUE", do_continue),
     ("EXIT", do_exit),
+    ("SEE", see),
 ];

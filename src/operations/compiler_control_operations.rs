@@ -95,6 +95,17 @@ pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate
     Result::Ok(())            
 }
 
+pub fn body(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+    let xt = pop_or_underflow!(state.stack.pop());
+    match xt {
+        evaluate::definition::ExecutionToken::DefinedOperation(address) => state.stack.push(address),
+        evaluate::definition::ExecutionToken::Number(i) => state.stack.push(i),
+        _ => state.stack.push(xt)
+    };
+
+    Ok(())
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         ("IMMEDIATE", false, immedate),
@@ -105,9 +116,11 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("POSTPONE", true, postpone),
         ("LITERAL", true, literal),
         ("EXECUTE", false, execute),
-        ("`", false, read_execution_token),
+        ("'", false, read_execution_token),
+        (">BODY", false, body),
         ("[`]", true, get_execution_token),
-        ("(", true, absorb_comment!(")")),
+        ("(", true, absorb_comment!(')')),
+        ("\\", true, absorb_comment!('\n')),
         // branch generators
         ("_BNE", false, push_branch_false_instruction),
         ("_B", false, push_branch_instruction),

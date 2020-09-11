@@ -1,3 +1,7 @@
+clean up the codebase using `?` operator!!!
+
+add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization
+
 remove all of the unwraps from Debugger
 write tests for bytes, doubles, create, allot
 
