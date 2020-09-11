@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::io;
 use crate::evaluate::{self, definition, kernels};
 use crate::environment::{memory};
 
@@ -56,7 +57,16 @@ impl <'a> DebugState<'a> {
 
 pub struct DebugKernel<'a, NK: kernels::Kernel> {
     debug_state: DebugState<'a>,
+    input_stream: Option<io::tokens::TokenStream<'a>>,
+    output_stream: Option<Box<dyn io::output_stream::OutputStream + 'a>>,
     next_kernel: NK
+}
+
+impl<'a, NK: kernels::Kernel> DebugKernel<'a, NK> {
+    pub fn init_io<I: Iterator<Item = char> + 'a, O: io::output_stream::OutputStream + 'a>(&mut self, input: I, output: O) {
+        self.input_stream = Some(io::tokens::TokenStream::new(input));
+        self.output_stream = Some(Box::new(output));
+    }
 }
 
 impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
@@ -68,16 +78,24 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
             
         Self {
             debug_state: DebugState::new(),
+            input_stream: None, output_stream: None,
             next_kernel: NK::new(state)
         }
     }
 
     fn get_next_kernel(&mut self) -> &mut Self::NextKernel { &mut self.next_kernel }
 
-    fn evaluate(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO) -> evaluate::ForthResult {
+    fn evaluate(&mut self, state: &mut evaluate::ForthState, _: evaluate::ForthIO) -> evaluate::ForthResult {
+        let io = if let (Some(input), Some(output)) = (self.input_stream.as_mut(), self.output_stream.as_mut().map(|x| x.as_mut())) {
+            evaluate::ForthIO::new(input, output)
+        } else {
+            return Ok(())
+        };
+
+        let debug_state = &mut self.debug_state;
         let hit_breakpoint = state.instruction_pointer
             // .map(|instruction_pointer| instruction_pointer.minus_cell(1))
-            .and_then(|instruction_pointer| self.debug_state.breakpoints.iter().find(|addr| **addr == instruction_pointer));
+            .and_then(|instruction_pointer| debug_state.breakpoints.iter().find(|addr| **addr == instruction_pointer));
         if let Some(breakpoint) = hit_breakpoint {
             io.output_stream.writeln("");
             io.output_stream.writeln("------------------------------------------------------");
@@ -99,7 +117,13 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
         self.debug_state.current_error.take().map_or_else(|| Ok(()), |error| Err(error))
     }
 
-    fn handle_error(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 
+    fn handle_error(&mut self, state: &mut evaluate::ForthState, _: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 
+        let io = if let (Some(input), Some(output)) = (self.input_stream.as_mut(), self.output_stream.as_mut().map(|x| x.as_mut())) {
+            evaluate::ForthIO::new(input, output)
+        } else {
+            return Err(error)
+        };
+
         match error {
             evaluate::Error::TokenStreamEmpty | evaluate::Error::Halt => return Err(error),
             _ => ()

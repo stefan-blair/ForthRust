@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use forth::{Forth, output_stream, kernels, debugger, profiler};
+use forth::{Forth, output_stream, kernels, kernels::Kernel, debugger, profiler};
 
 
 /**
@@ -53,6 +53,8 @@ impl output_stream::OutputStream for StdoutStream {
 fn main() {
     let mut output_stream = StdoutStream::new();
     let mut forth = Forth::<profiler::ProfilerKernel<debugger::DebugKernel<kernels::DefaultKernel>>>::new();
+    forth.kernel.get_next_kernel().init_io(StdinStream::new(), StdoutStream::new());
+ 
     let result = forth.evaluate_stream(StdinStream::new(), &mut output_stream);
     println!("Finished evaluating: {:?}", result);
 
