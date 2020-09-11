@@ -3,7 +3,7 @@ use super::*;
 
 pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let address = state.stack.pop()?;
-    state.stack.push(state.memory.read::<value::Value>(address)?);
+    state.stack.push(state.memory.read::<N>(address)?);
     Result::Ok(())
 }
 

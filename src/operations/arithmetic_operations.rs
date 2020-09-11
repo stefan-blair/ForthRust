@@ -135,7 +135,7 @@ pub fn max<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
 pub fn negate<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| a.neg()) }
 pub fn abs<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { mono_operation::<G>(&mut state.stack, |a| a.abs()) }
 // // tertiary operators
-pub fn multiply_divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { tertiary_operation::<G>(&mut state.stack, |a, b, c| if c == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok((a * b) / c)}) }
+pub fn multiply_divide<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { tertiary_operation::<G>(&mut state.stack, |a, b, c| if a == G::Output::as_zero() { Result::Err(evaluate::Error::DivisionByZero) } else { Result::Ok((c * b) / a)}) }
 // // boolean operators
 pub fn equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a == b))) }
 pub fn not_equals<G: Glue>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { binary_operation::<G>(&mut state.stack, |a, b| Result::Ok(G::Output::from(a != b))) }
@@ -217,8 +217,8 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     operations.append(&mut overflowable_operations!("M", glue::SingleToDoubleGlue));
     operations.append(&mut overflowable_operations!("UM", glue::UnsignedSingleToDoubleGlue));
 
-    operations.append(&mut growing_operations!("", glue::SingleToDoubleGlue));
-    operations.append(&mut growing_operations!("U", glue::UnsignedSingleToDoubleGlue));
+    operations.append(&mut growing_operations!("", glue::PassThroughGlue<generic_numbers::Number>));
+    operations.append(&mut growing_operations!("U", glue::PassThroughGlue<generic_numbers::UnsignedNumber>));
 
     operations.append(&mut both_signs_operations!("", glue::PassThroughGlue<generic_numbers::Number>));
     operations.append(&mut both_signs_operations!("D", glue::PassThroughGlue<generic_numbers::DoubleNumber>));

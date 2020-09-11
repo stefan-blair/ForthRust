@@ -1,7 +1,14 @@
-clean up the codebase using `?` operator!!!
+make an executor or something that executes a file but has a live debugger
+
 replace notion of Name with Word
 
 add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization
+
+implement a replay debugger
+
+
+
+
 
 remove all of the unwraps from Debugger
 write tests for bytes, doubles, create, allot
