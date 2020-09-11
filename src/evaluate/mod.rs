@@ -210,7 +210,7 @@ impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     }
 
     pub fn return_from(&mut self) -> ForthResult {
-        *self.instruction_pointer = self.return_stack.pop();
+        *self.instruction_pointer = self.return_stack.pop().ok();
         Ok(())
     }
 
@@ -233,8 +233,8 @@ impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
         self.instruction_pointer.ok_or(Error::InvalidAddress)
             .map(|instruction_pointer| {
                 // fetch the current instruction
-                *self.current_instruction = self.memory.read(instruction_pointer);
-            }).or_else(|_| self.input_stream.next().ok_or(Error::TokenStreamEmpty)
+                *self.current_instruction = self.memory.read(instruction_pointer).ok();
+            }).or_else(|_| self.input_stream.next().ok().ok_or(Error::TokenStreamEmpty)
             .and_then(|token| self.definitions.get_from_token(token))
             .map(|definition| if *self.execution_mode == ExecutionMode::Compile && !definition.immediate {
                 self.memory.push(definition.execution_token.value());

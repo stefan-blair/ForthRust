@@ -1,4 +1,5 @@
 clean up the codebase using `?` operator!!!
+replace notion of Name with Word
 
 add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization
 

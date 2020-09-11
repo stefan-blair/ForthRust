@@ -1,37 +1,30 @@
 use super::*;
 
-use crate::get_token;
 
 pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = pop_or_underflow!(state.stack.pop());
-    state.stack.push(read_or_error!(state.memory.read::<value::Value>(address)));
+    let address = state.stack.pop()?;
+    state.stack.push(state.memory.read::<value::Value>(address)?);
     Result::Ok(())
 }
 
 pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let (address, value) = (pop_or_underflow!(state.stack.pop()), pop_or_underflow!(state.stack, N));
+    let (address, value) = (state.stack.pop()?, state.stack.pop::<N>()?);
 
-    write_or_error!(state.memory, address, value);
+    state.memory.write(address, value)?;
     Result::Ok(())
 }
 
 pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    state.memory.push(pop_or_underflow!(state.stack, value::Value));
+    state.memory.push(state.stack.pop::<value::Value>()?);
     Result::Ok(())
 }
 
 pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let name = match get_token!(state) {
-        io::tokens::Token::Name(name) => name,
-        _ => return Result::Err(evaluate::Error::InvalidWord)
-    };
-    let nametag = match state.definitions.get_nametag(&name) {
-        Some(nametag) => nametag,
-        None => return Result::Err(evaluate::Error::InvalidWord)
-    };
+    let name = state.input_stream.next_word()?;
+    let nametag = state.definitions.get_nametag(&name)?;
 
     state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
-        let number = pop_or_underflow!(state.stack, generic_numbers::Number);
+        let number = state.stack.pop::<generic_numbers::Number>()?;
         state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
         Result::Ok(())
     })).value());

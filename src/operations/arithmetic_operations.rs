@@ -83,10 +83,7 @@ mod helper_functions {
     ) -> Result<Vec<G::Output>, evaluate::Error> {
         let mut args: Vec<G::Output> = Vec::new();
         for _ in 0..arg_count {
-            match stack.pop::<<G as Glue>::Input>() {
-                Some(number) => args.push(G::glue(number)),
-                None => return Result::Err(evaluate::Error::StackUnderflow)
-            }
+            stack.pop::<<G as Glue>::Input>().map(|number| args.push(G::glue(number)))?;
         }
         Result::Ok(args)
     }

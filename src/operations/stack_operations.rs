@@ -2,55 +2,66 @@ use super::*;
 
 
 // return stack commands
-pub fn stack_to_return_stack<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.return_stack.push(pop_or_underflow!(state.stack, T)); Result::Ok(()) }
-pub fn return_stack_to_stack<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.stack.push(pop_or_underflow!(state.return_stack, T)); Result::Ok(()) }
-pub fn copy_from_return_stack<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.stack.push(peek_or_underflow!(state.return_stack, T)); Result::Ok(()) }
+pub fn stack_to_return_stack<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
+    state.return_stack.push(state.stack.pop::<T>()?); 
+    Ok(()) 
+}
+
+pub fn return_stack_to_stack<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
+    state.stack.push(state.return_stack.pop::<T>()?); 
+    Ok(()) 
+}
+
+pub fn copy_from_return_stack<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
+    state.stack.push(state.return_stack.peek::<T>()?); 
+    Ok(()) 
+}
 
 // argument stack commands
 pub fn dup<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
-    let value = peek_or_underflow!(state.stack, T);
+    let value = state.stack.peek::<T>()?;
     state.stack.push(value); 
-    Result::Ok(()) 
+    Ok(()) 
 }
-pub fn drop<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { pop_or_underflow!(state.stack, T); Result::Ok(()) }
+pub fn drop<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.stack.pop::<T>()?; Ok(()) }
 pub fn swap<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
-    let (a, b) = get_two_from_stack!(&mut state.stack, T, T);
+    let (a, b): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(a);
     state.stack.push(b);
-    Result::Ok(())
+    Ok(())
 }
 pub fn over<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
-    let (a, b) = get_two_from_stack!(&mut state.stack, T, T);
+    let (a, b): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(b);
     state.stack.push(a);
     state.stack.push(b);
-    Result::Ok(())
+    Ok(())
 }
 pub fn rot<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
-    let (a, b, c) = (pop_or_underflow!(state.stack, T), pop_or_underflow!(state.stack, T), pop_or_underflow!(state.stack, T));
+    let (a, b, c): (T, T, T) = (state.stack.pop()?, state.stack.pop()?, state.stack.pop()?);
     state.stack.push(b);
     state.stack.push(a);
     state.stack.push(c);
-    Result::Ok(())
+    Ok(())
 }
 pub fn nrot<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let (a, b, c) = (pop_or_underflow!(state.stack, T), pop_or_underflow!(state.stack, T), pop_or_underflow!(state.stack, T));
+    let (a, b, c): (T, T, T) = (state.stack.pop()?, state.stack.pop()?, state.stack.pop()?);
     state.stack.push(c);
     state.stack.push(a);
     state.stack.push(b);
-    Result::Ok(())
+    Ok(())
 }
 pub fn nip<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let (a, _) = get_two_from_stack!(&mut state.stack, T, T);
+    let (a, _): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(a);
-    Result::Ok(())
+    Ok(())
 }
 pub fn tuck<T: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let (a, b) = get_two_from_stack!(&mut state.stack, T, T);
+    let (a, b): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(a);
     state.stack.push(b);
     state.stack.push(a);
-    Result::Ok(())
+    Ok(())
 }
 
 macro_rules! stack_operations {

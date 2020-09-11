@@ -132,7 +132,7 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
                 Ok(())
             }
             evaluate::Error::UnknownWord(name) if &name == "PROFILE_WORD" => {
-                match io.input_stream.next().ok_or(evaluate::Error::NoMoreTokens).and_then(|token| state.definitions.get_from_token(token)).map(|definition| definition.execution_token) {
+                match io.input_stream.next().and_then(|token| state.definitions.get_from_token(token)).map(|definition| definition.execution_token) {
                     Ok(execution_token) => {
                         self.profiling_word = Some(ProfilingWord::new(execution_token));
                         self.local_information = ProfilerInformation::new();

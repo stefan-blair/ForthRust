@@ -1,3 +1,4 @@
+use crate::evaluate::Error;
 use crate::environment::generic_numbers;
 
 
@@ -10,7 +11,7 @@ impl<'a> TokenStream<'a> {
         Self { stream: Box::new(stream) }
     }
 
-    pub fn next(&mut self) -> Option<Token> {
+    pub fn next(&mut self) -> Result<Token, Error> {
         let mut s = String::new();
         if let Some(c) = self.stream.find(|c| !c.is_whitespace()) {
             s.push(c);
@@ -22,14 +23,21 @@ impl<'a> TokenStream<'a> {
                 }
             }
 
-            Some(Token::tokenize(&s))
+            Ok(Token::tokenize(&s))
         } else {
-            None
+            Err(Error::NoMoreTokens)
         }
     }
 
-    pub fn next_char(&mut self) -> Option<char> {
-        self.stream.next()
+    pub fn next_word(&mut self) -> Result<String, Error> {
+        match self.next()? {
+            Token::Word(word) => Ok(word),
+            _ => Err(Error::InvalidWord)
+        }
+    }
+
+    pub fn next_char(&mut self) -> Result<char, Error> {
+        self.stream.next().ok_or(Error::NoMoreTokens)
     }
 
     // todo: implement some sort of next_char function
@@ -38,7 +46,7 @@ impl<'a> TokenStream<'a> {
 #[derive(Debug)]
 pub enum Token {
     Integer(generic_numbers::Number),
-    Name(String),
+    Word(String),
 }
 
 impl Token {
@@ -49,6 +57,6 @@ impl Token {
             .or_else(|| s.parse::<generic_numbers::Number>().ok())
         }
 
-        parse_number(s).map_or_else(|| Token::Name(s.to_uppercase()), |i| Token::Integer(i))
+        parse_number(s).map_or_else(|| Token::Word(s.to_uppercase()), |i| Token::Integer(i))
     }
 }

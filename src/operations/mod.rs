@@ -1,6 +1,5 @@
 use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
-use crate::evaluate::{self, ForthResult, Error, ForthEvaluator};
-use crate::io;
+use crate::evaluate::{self, ForthResult, ForthEvaluator};
 
 pub mod control_flow_operations;
 mod arithmetic_operations;
@@ -12,100 +11,22 @@ mod stack_operations;
 mod string_operations;
 
 // import all of the macros exposed by this module for ease of use by the other operations modules
-use crate::get_two_from_stack;
-use crate::pop_or_underflow;
-use crate::read_or_error;
-use crate::write_or_error;
-use crate::peek_or_underflow;
-use crate::get_token;
 use crate::postpone;
 use crate::maybe;
 
 
 // a set of macros to help simplify the operations
 mod helper_macros {
-    #[macro_export]
-    macro_rules! get_token {
-        ($state:ident) => {
-            match $state.input_stream.next() {
-                Some(token) => token,
-                None => return Result::Err(evaluate::Error::InvalidWord)
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! peek_or_underflow {
-        ($stack:expr, $type:ty) => {
-            match $stack.peek::<$type>() {
-                Some(v) => v,
-                None => return Result::Err(evaluate::Error::StackUnderflow)
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! pop_or_underflow {
-        ($stack:expr, $type:ty) => {
-            match $stack.pop::<$type>() {
-                Some(v) => v,
-                None => return Result::Err(evaluate::Error::StackUnderflow)
-            }
-        };
-        ($result:expr) => {
-            match $result {
-                Some(v) => v,
-                None => return Result::Err(evaluate::Error::StackUnderflow)
-            }
-        }
-    }
-
-    #[macro_export]
-    macro_rules! get_two_from_stack {
-        ($stack:expr, $type_1:ty, $type_2:ty) => {
-            (pop_or_underflow!($stack, $type_1), pop_or_underflow!($stack, $type_2))
-        };
-    }
-
-    #[macro_export]
-    macro_rules! match_or_error {
-        ($obj:expr, $pat:pat, $suc:expr, $err:expr) => {
-            match $obj {
-                $pat => $suc,
-                _ => return Result::Err($err)
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! read_or_error {
-        ($result:expr) => {
-            match $result {
-                Some(v) => v,
-                None => return Result::Err(evaluate::Error::InvalidAddress)
-            }
-        }
-    }
-
-    #[macro_export]
-    macro_rules! write_or_error {
-        ($memory:expr, $address:expr, $value:expr) => {
-            if !$memory.write($address, $value) {
-                return Result::Err(evaluate::Error::InvalidAddress)
-            }
-        }
-    }
-
     /**
      * Macro that wraps operations to make them into maybe versions (?), which only operate if the top of the stack is nonzero.
      */
     #[macro_export]
     macro_rules! maybe {
         ($v:expr) => {
-            |state: &mut evaluate::ForthEvaluator| match state.stack.peek::<value::Value>().map(|value| value.to_number()) {
-                Some(x) if x > 0 => $v(state),
-                Some(_) => Result::Ok(()),
-                None => Result::Err(evaluate::Error::StackUnderflow),
+            |state: &mut evaluate::ForthEvaluator| if state.stack.peek::<value::Value>()?.to_number() > 0 {
+                $v(state)
+            } else {
+                Ok(())                
             }
         };
     }
@@ -117,13 +38,13 @@ mod helper_macros {
     macro_rules! absorb_comment {
         ($closing_brace:expr) => {
             |state| {
-                while let Some(c) = state.input_stream.next_char() {
+                while let Ok(c) = state.input_stream.next_char() {
                     if c == $closing_brace {
                         return Result::Ok(());
                     }
                 }
             
-                Result::Err(evaluate::Error::NoMoreTokens)    
+                Err(evaluate::Error::NoMoreTokens)    
             }        
         };
     }
@@ -145,9 +66,10 @@ mod code_compiler_helpers {
 
     pub fn create_branch_false_instruction<'a>(destination: memory::Address) -> evaluate::compiled_code::CompiledCode<'a> {
         Box::new(move |state| {
-            match pop_or_underflow!(state.stack, value::Value) {
-                value if value.to_number() > 0 => Result::Ok(()),
-                _ => state.jump_to(destination)
+            if state.stack.pop::<generic_numbers::UnsignedNumber>()? > 0 {
+                Result::Ok(())
+            } else {
+                state.jump_to(destination)
             }
         })
     }

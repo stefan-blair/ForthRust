@@ -1,4 +1,3 @@
-use crate::io;
 use crate::evaluate;
 use crate::environment;
 use super::debugger;
@@ -132,10 +131,7 @@ pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut ev
 
 pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
     let address = debugger_state.forth.state.stack.pop().unwrap();
-    let format = match io.input_stream.next() {
-        Some(io::tokens::Token::Name(format)) => format,
-        _ => return
-    };
+    let format = io.input_stream.next_word().unwrap();
     io.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
 }
 

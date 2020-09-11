@@ -61,18 +61,18 @@ impl value::ValueVariant for ExecutionToken {
         stack.push(self.value())
     }
 
-    fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
-        stack.pop().and_then(|value| match value {
-            value::Value::ExecutionToken(xt) => Some(xt),
-            _ => None
-        })
+    fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error> {
+        match stack.pop()? {
+            value::Value::ExecutionToken(xt) => Ok(xt),
+            _ => Err(Error::InvalidExecutionToken)
+        }
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool{
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
         memory.write_value(address, self.value())
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
         memory.read_value(address).map(|value| match value {
             value::Value::ExecutionToken(xt) => xt,
             value::Value::Number(n) => ExecutionToken::Number(n)
@@ -132,7 +132,7 @@ impl DefinitionSet {
     pub fn get_from_token(&self, token: tokens::Token) -> Result<Definition, Error> {
         match token {
             tokens::Token::Integer(i) => Ok(Definition::new(ExecutionToken::Number(i), false)),
-            tokens::Token::Name(name) => self.nametag_map.get(&name).map(|nametag| self.get(*nametag)).ok_or(Error::UnknownWord(name))
+            tokens::Token::Word(word) => self.nametag_map.get(&word).map(|nametag| self.get(*nametag)).ok_or(Error::UnknownWord(word))
         }
     }
 
@@ -140,17 +140,17 @@ impl DefinitionSet {
         self.definitions[nametag.to_offset()]
     }
 
-    pub fn get_nametag(&self, name: &str) -> Option<NameTag> {
-        self.nametag_map.get(name).map(|x| *x)
+    pub fn get_nametag(&self, word: &str) -> Result<NameTag, Error> {
+        self.nametag_map.get(word).map(|x| *x).ok_or(Error::UnknownWord(String::from(word)))
     }
 
     pub fn make_immediate(&mut self, nametag: NameTag) {
         self.definitions[nametag.to_offset()].immediate = true;
     }
 
-    pub fn add(&mut self, name: String, definition: Definition) -> NameTag {
+    pub fn add(&mut self, word: String, definition: Definition) -> NameTag {
         let nametag = NameTag(self.definitions.len());
-        self.nametag_map.insert(name, nametag);
+        self.nametag_map.insert(word, nametag);
         self.definitions.push(definition);
         self.most_recent = nametag;
 

@@ -1,5 +1,6 @@
 use std::mem;
 
+use crate::evaluate::{Error};
 use super::value::{self, ValueVariant};
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
@@ -79,15 +80,15 @@ impl ValueVariant for Address {
         stack.push(self.to_number());
     }
 
-    fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
+    fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error> {
         stack.pop().map(|number: generic_numbers::Number| Self::from_offset(number as Offset))
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
+    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
         memory.write(address, self.to_number())
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
+    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
         memory.read(address).map(|number: generic_numbers::Number| Self::from_offset(number as Offset))
     }
 
@@ -119,25 +120,24 @@ impl Memory {
         self.0.push(0.value());
     }
 
-    pub fn check_address(&self, address: Address) -> bool {
-        address.get_cell() < self.0.len() - 1
-    }
-
-    pub fn write_value(&mut self, address: Address, value: value::Value) -> bool {
-        if self.check_address(address) {
-            self.0[address.get_cell()] = value;
-            true
+    pub fn check_address(&self, address: Address) -> Result<(), Error> {
+        if address.get_cell() < self.0.len() {
+            Ok(())
         } else {
-            false
+            Err(Error::InvalidAddress)
         }
     }
 
-    pub fn read_value(&self, address: Address) -> Option<value::Value> {
-        if self.check_address(address) {
-            Some(self.0[address.get_cell()])
-        } else {
-            None
-        }
+    pub fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
+        self.check_address(address).map(|_| {
+            self.0[address.get_cell()] = value
+        })
+    }
+
+    pub fn read_value(&self, address: Address) -> Result<value::Value, Error> {
+        self.check_address(address).map(|_|{
+            self.0[address.get_cell()]
+        })
     }
 
     pub fn push_value(&mut self, value: value::Value) {
@@ -146,11 +146,11 @@ impl Memory {
         self.0.push(0.value());
     }
 
-    pub fn write<T: value::ValueVariant>(&mut self, address: Address, number: T) -> bool {
+    pub fn write<T: value::ValueVariant>(&mut self, address: Address, number: T) -> Result<(), Error> {
         number.write_to_memory(self, address)
     }
 
-    pub fn read<T: value::ValueVariant>(&self, address: Address) -> Option<T> {
+    pub fn read<T: value::ValueVariant>(&self, address: Address) -> Result<T, Error> {
         T::read_from_memory(self, address)
     }
 
@@ -165,18 +165,15 @@ impl Memory {
 }
 
 impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {
-    fn read_number_by_type(&self, address: Address) -> Option<generic_numbers::Byte> {
+    fn read_number_by_type(&self, address: Address) -> Result<generic_numbers::Byte, Error> {
         self.read_value(address).map(|value| value.to_number().to_chunks()[address.get_cell_byte()])
     }
 
-    fn write_number_by_type(&mut self, address: Address, byte: generic_numbers::Byte) -> bool {
-        if let Some(value) = self.read_value(address) {
-            let mut bytes = value.to_number().to_chunks();
-            bytes[address.get_cell_byte()] = byte;
-            self.write_value(address, generic_numbers::Number::from_chunks(&bytes).value())
-        } else {
-            false
-        }
+    fn write_number_by_type(&mut self, address: Address, byte: generic_numbers::Byte) -> Result<(), Error> {
+        let value = self.read_value(address)?;
+        let mut bytes = value.to_number().to_chunks();
+        bytes[address.get_cell_byte()] = byte;
+        self.write_value(address, generic_numbers::Number::from_chunks(&bytes).value())
     }
 
     fn push_number_by_type(&mut self, byte: generic_numbers::Byte) {
@@ -185,11 +182,11 @@ impl generic_numbers::MemoryOperations<generic_numbers::Byte> for Memory {
 }
 
 impl generic_numbers::MemoryOperations<generic_numbers::Number> for Memory {
-    fn read_number_by_type(&self, address: Address) -> Option<generic_numbers::Number> {
+    fn read_number_by_type(&self, address: Address) -> Result<generic_numbers::Number, Error> {
         self.read_value(address).map(|value| value.to_number())
     }
 
-    fn write_number_by_type(&mut self, address: Address, number: generic_numbers::Number) -> bool {
+    fn write_number_by_type(&mut self, address: Address, number: generic_numbers::Number) -> Result<(), Error> {
         self.write_value(address, number.value())
     }
 
@@ -199,22 +196,19 @@ impl generic_numbers::MemoryOperations<generic_numbers::Number> for Memory {
 }
 
 impl generic_numbers::MemoryOperations<generic_numbers::DoubleNumber> for Memory {
-    fn read_number_by_type(&self, address: Address) -> Option<generic_numbers::DoubleNumber> {
-        match (self.read_value(address), self.read_value(address.plus_cell(1))) {
-            (Some(a), Some(b)) => Some(generic_numbers::DoubleNumber::from_chunks(&[a.to_number(), b.to_number()])),
-            _ => None
-        }
+    fn read_number_by_type(&self, address: Address) -> Result<generic_numbers::DoubleNumber, Error> {
+        let a = self.read_value(address)?;
+        let b = self.read_value(address.plus_cell(1))?;
+        Ok(generic_numbers::DoubleNumber::from_chunks(&[a.to_number(), b.to_number()]))
     }
 
-    fn write_number_by_type(&mut self, mut address: Address, number: generic_numbers::DoubleNumber) -> bool {
+    fn write_number_by_type(&mut self, mut address: Address, number: generic_numbers::DoubleNumber) -> Result<(), Error> {
         let chunks = number.to_chunks();
         let mut address_probe = address;
         
         // first do a check to make sure this is a valid write position
         for _ in chunks.iter() {
-            if !self.check_address(address_probe) {
-                return false
-            }
+            self.check_address(address_probe)?;
             address_probe.increment_cell();
         }
 
@@ -224,7 +218,7 @@ impl generic_numbers::MemoryOperations<generic_numbers::DoubleNumber> for Memory
             address.increment_cell();
         }
 
-        return true
+        Ok(())
     }
 
     fn push_number_by_type(&mut self, double_number: generic_numbers::DoubleNumber) {

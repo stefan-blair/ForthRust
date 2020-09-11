@@ -8,11 +8,7 @@ pub fn set_interpret(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthRes
 pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.set_compilemode() }
 
 pub fn start_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let name = match get_token!(state) {
-        io::tokens::Token::Name(name) => name,
-        _ => return Result::Err(evaluate::Error::InvalidWord)
-    };
-
+    let name = state.input_stream.next_word()?;
     let address = state.memory.top();
     let execution_token = evaluate::definition::ExecutionToken::DefinedOperation(address);
 
@@ -28,11 +24,7 @@ pub fn end_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::F
 }
 
 pub fn postpone(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let token = get_token!(state);
-    let definition = match state.definitions.get_from_token(token) {
-        Ok(definition) => definition,
-        error => return error.map(|_|())
-    };
+    let definition = state.definitions.get_from_token(state.input_stream.next()?)?;
 
     let xt = if definition.immediate {
         definition.execution_token
@@ -49,27 +41,25 @@ pub fn postpone(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
 }
 
 pub fn literal(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(pop_or_underflow!(state.stack, value::Value)));
+    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(state.stack.pop::<value::Value>()?));
     state.memory.push(xt.value());
     Result::Ok(())
 }
 
 pub fn execute(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let execution_token = pop_or_underflow!(state.stack, evaluate::definition::ExecutionToken);
+    let execution_token = state.stack.pop::<evaluate::definition::ExecutionToken>()?;
     state.execute(execution_token)
 }
 
 // read the next token from the input stream
 pub fn read_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    state.input_stream
-        .next().ok_or(evaluate::Error::NoMoreTokens)
+    state.input_stream.next()
         .and_then(|token| state.definitions.get_from_token(token))
         .map(|definition| state.stack.push(definition.execution_token))       
 }
 
 pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    state.input_stream
-        .next().ok_or(evaluate::Error::NoMoreTokens)
+    state.input_stream.next()
         .and_then(|token| state.definitions.get_from_token(token))
         .map(|definition| {
             let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(definition.execution_token.value()));
@@ -82,21 +72,21 @@ pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::Fo
  * Pushes the execution token of this branch instruction onto the stack.
  */
 pub fn push_branch_false_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = pop_or_underflow!(state.stack.pop());
+    let address = state.stack.pop()?;
     let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(address));
     state.stack.push(xt);
     Result::Ok(())            
 }
 
 pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = pop_or_underflow!(state.stack.pop());
+    let address = state.stack.pop()?;
     let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(address));
     state.stack.push(xt);
     Result::Ok(())            
 }
 
 pub fn body(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let xt = pop_or_underflow!(state.stack.pop());
+    let xt = state.stack.pop()?;
     match xt {
         evaluate::definition::ExecutionToken::DefinedOperation(address) => state.stack.push(address),
         evaluate::definition::ExecutionToken::Number(i) => state.stack.push(i),

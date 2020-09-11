@@ -4,6 +4,7 @@ use std::cmp;
 use std::fmt;
 use std::mem;
 
+use crate::evaluate::Error;
 use super::memory;
 use super::stack;
 use super::value;
@@ -13,12 +14,12 @@ use super::value;
  */
 pub trait StackOperations<T> { 
     fn push_number_by_type(&mut self, value: T);
-    fn pop_number_by_type(&mut self) -> Option<T>;
+    fn pop_number_by_type(&mut self) -> Result<T, Error>;
 }
 
 pub trait MemoryOperations<T> {
-    fn read_number_by_type(&self, address: memory::Address) -> Option<T>;
-    fn write_number_by_type(&mut self, address: memory::Address, value: T) -> bool;
+    fn read_number_by_type(&self, address: memory::Address) -> Result<T, Error>;
+    fn write_number_by_type(&mut self, address: memory::Address, value: T) -> Result<(), Error>;
     fn push_number_by_type(&mut self, value: T);
 }
 
@@ -77,15 +78,15 @@ macro_rules! generic_number {
                 stack.push_number_by_type(self);
             }
         
-            fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
+            fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error> {
                 stack.pop_number_by_type()
             }
 
-            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
+            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
                 memory.write_number_by_type(address, self)
             }
 
-            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
+            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
                 memory.read_number_by_type(address)
             }
 
@@ -122,17 +123,17 @@ macro_rules! generic_number {
                 stack.push_number_by_type(self as $name);
             }
 
-            fn pop_from_stack(stack: &mut stack::Stack) -> Option<Self> {
+            fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error> {
                 stack.pop_number_by_type().map(|number: $name| number as $unsigned_type)
             }
 
-            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> bool {
+            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
                 memory.write_number_by_type(address, self as $name)
             }
 
-            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Option<Self> {
-                let number: Option<$name> = memory.read_number_by_type(address);
-                number.map(|n| n as $unsigned_type)
+            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
+                let number: $name = memory.read_number_by_type(address)?;
+                Ok(number as $unsigned_type)
             }
 
             fn push_to_memory(self, memory: &mut memory::Memory) {
