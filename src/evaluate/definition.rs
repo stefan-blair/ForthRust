@@ -177,9 +177,9 @@ impl DefinitionSet {
             }
         }
 
-        for (name, xt) in self.nametag_map.iter().map(|(name, key)| (name, self.get(*key).execution_token)) {
+        for (word, xt) in self.nametag_map.iter().map(|(word, key)| (word, self.get(*key).execution_token)) {
             if equal(execution_token, xt) {
-                return Some(name.clone())
+                return Some(word.clone())
             }
         }
 

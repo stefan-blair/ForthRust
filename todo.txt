@@ -1,12 +1,7 @@
-make an executor or something that executes a file but has a live debugger
-
-replace notion of Name with Word
 
 add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization
 
 implement a replay debugger
-
-
 
 
 

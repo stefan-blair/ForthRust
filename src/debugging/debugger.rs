@@ -38,8 +38,8 @@ impl <'a> DebugState<'a> {
         self.debugging = true;
         while self.debugging {
             let result = match self.forth.evaluate(input_stream, output_stream) {
-                Result::Err(evaluate::Error::UnknownWord(name)) => {
-                    match self.debug_operations.get(&name).ok_or(evaluate::Error::UnknownWord(name)) {
+                Result::Err(evaluate::Error::UnknownWord(word)) => {
+                    match self.debug_operations.get(&word).ok_or(evaluate::Error::UnknownWord(word)) {
                     Ok(op) => Ok(op(self, state, evaluate::ForthIO { input_stream, output_stream })),
                     error => error.map(|_|())
                 }}

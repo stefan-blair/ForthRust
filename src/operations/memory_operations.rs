@@ -20,8 +20,8 @@ pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult 
 }
 
 pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let name = state.input_stream.next_word()?;
-    let nametag = state.definitions.get_nametag(&name)?;
+    let word = state.input_stream.next_word()?;
+    let nametag = state.definitions.get_nametag(&word)?;
 
     state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
         let number = state.stack.pop::<generic_numbers::Number>()?;

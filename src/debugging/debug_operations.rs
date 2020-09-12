@@ -12,16 +12,16 @@ fn stringify_address(addr: environment::memory::Address) -> String {
 }
 
 pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evaluate::definition::ExecutionToken) -> String {
-    let name = match debug_target.definitions.debug_only_get_name(xt) {
-        Some(name) => format!("{} ", name),
+    let word = match debug_target.definitions.debug_only_get_name(xt) {
+        Some(word) => format!("{} ", word),
         None => "".to_string()
     };
 
     match xt {
         evaluate::definition::ExecutionToken::Number(n) => format!("push {}", n),
-        evaluate::definition::ExecutionToken::DefinedOperation(addr) => format!("{}(defined call @ {})", name, stringify_address(addr)),
-        evaluate::definition::ExecutionToken::CompiledOperation(_) => format!("{}(call compiled operation)", name),
-        evaluate::definition::ExecutionToken::Operation(_) => format!("{}(builtin)", name),
+        evaluate::definition::ExecutionToken::DefinedOperation(addr) => format!("{}(defined call @ {})", word, stringify_address(addr)),
+        evaluate::definition::ExecutionToken::CompiledOperation(_) => format!("{}(call compiled operation)", word),
+        evaluate::definition::ExecutionToken::Operation(_) => format!("{}(builtin)", word),
     }
 }
 
@@ -77,9 +77,9 @@ fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[environm
 
 fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String, environment::memory::Address)> {
     debug_target.definitions.debug_only_get_nametag_map().iter()
-        .map(|(name, nametag)| (name, debug_target.definitions.get(*nametag).execution_token))
-        .filter_map(|(name, execution_token)| match execution_token { 
-            evaluate::definition::ExecutionToken::Number(addr) => Some((name, environment::memory::Address::debug_only_from_offset(addr as environment::memory::Offset))),
+        .map(|(word, nametag)| (word, debug_target.definitions.get(*nametag).execution_token))
+        .filter_map(|(word, execution_token)| match execution_token { 
+            evaluate::definition::ExecutionToken::Number(addr) => Some((word, environment::memory::Address::debug_only_from_offset(addr as environment::memory::Offset))),
             _ => None
         }).collect::<Vec<_>>()
 }
@@ -90,14 +90,14 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(us
     let (start, end) = range.unwrap_or((0, memory.len()));
     for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
         let current_address = environment::memory::Address::debug_only_from_cell(i as environment::memory::Offset);
-        let name = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::DefinedOperation(current_address)) {
-            Some(name) => format!("definition of {}", name),
-            None => match variables.iter().filter_map(|(name, addr)| if *addr == current_address {
-                Some(name)
+        let word = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::DefinedOperation(current_address)) {
+            Some(word) => format!("definition of {}", word),
+            None => match variables.iter().filter_map(|(word, addr)| if *addr == current_address {
+                Some(word)
             } else {
                 None
             }).next() {
-                Some(name) => format!("memory of {}", name),
+                Some(word) => format!("memory of {}", word),
                 None => "".to_string()
             }
         };
@@ -108,8 +108,8 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(us
         };
 
         match value {
-            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, number, name)),
-            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, stringify_execution_token(&debug_target, *xt), name))
+            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, number, word)),
+            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, stringify_execution_token(&debug_target, *xt), word))
         }
     }
 }
@@ -160,8 +160,8 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
         io.output_stream.writeln("------------------------------------------------------");
     }
 
-    for (name, value) in &[("execution mode", execution_mode), ("current instruction", current_instruction), ("instruction pointer", instruction_pointer)] {
-        io.output_stream.writeln(&format!("{:>20}: {}", name, value));
+    for (word, value) in &[("execution mode", execution_mode), ("current instruction", current_instruction), ("instruction pointer", instruction_pointer)] {
+        io.output_stream.writeln(&format!("{:>20}: {}", word, value));
     }
     
     io.output_stream.writeln("------------------------------------------------------");
@@ -184,7 +184,7 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
 }
 
 pub(in super) fn all_commands(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    for (name, nametag) in debug_target.definitions.debug_only_get_nametag_map().iter() {
+    for (word, nametag) in debug_target.definitions.debug_only_get_nametag_map().iter() {
         let definition = debug_target.definitions.get(*nametag);
         let immediate_string = if definition.immediate {
             "immediate"
@@ -192,7 +192,7 @@ pub(in super) fn all_commands(_: &mut debugger::DebugState, debug_target: &mut e
             ""
         };
 
-        io.output_stream.writeln(&format!("{:<15}: {:<10} {}", name, immediate_string, stringify_execution_token(debug_target, definition.execution_token)))
+        io.output_stream.writeln(&format!("{:<15}: {:<10} {}", word, immediate_string, stringify_execution_token(debug_target, definition.execution_token)))
     }
 }
 

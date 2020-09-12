@@ -130,8 +130,8 @@ impl<'a> ForthState<'a> {
     }
 
     pub fn add_operations(&mut self, operations: operations::OperationTable) {
-        for (name, immediate, operation) in operations {
-            self.definitions.add(name.to_string(), definition::Definition::new(definition::ExecutionToken::Operation(operation), immediate));
+        for (word, immediate, operation) in operations {
+            self.definitions.add(word.to_string(), definition::Definition::new(definition::ExecutionToken::Operation(operation), immediate));
         };
     }
 

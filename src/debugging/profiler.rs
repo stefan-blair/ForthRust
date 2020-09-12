@@ -112,26 +112,26 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
 
     fn handle_error(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 
         match error {
-            evaluate::Error::UnknownWord(name) if &name == "PROFILE_START" => {
+            evaluate::Error::UnknownWord(word) if &word == "PROFILE_START" => {
                 self.recording = true;
                 self.profiling_word = None;
                 self.local_information = ProfilerInformation::new();
                 Ok(())
             }
-            evaluate::Error::UnknownWord(name) if &name == "PROFILE_END" => {
+            evaluate::Error::UnknownWord(word) if &word == "PROFILE_END" => {
                 self.recording = false;
                 self.profiling_word = None;
                 self.local_information.dump_statistics(state, io.output_stream);
                 Ok(())
             }
-            evaluate::Error::UnknownWord(name) if &name == "PROFILE_STATS" => {
+            evaluate::Error::UnknownWord(word) if &word == "PROFILE_STATS" => {
                 io.output_stream.writeln("Global Profiling Stats:");
                 self.global_information.dump_statistics(state, io.output_stream);
                 io.output_stream.writeln("Local Profiling Stats:");
                 self.local_information.dump_statistics(state, io.output_stream);
                 Ok(())
             }
-            evaluate::Error::UnknownWord(name) if &name == "PROFILE_WORD" => {
+            evaluate::Error::UnknownWord(word) if &word == "PROFILE_WORD" => {
                 match io.input_stream.next().and_then(|token| state.definitions.get_from_token(token)).map(|definition| definition.execution_token) {
                     Ok(execution_token) => {
                         self.profiling_word = Some(ProfilingWord::new(execution_token));

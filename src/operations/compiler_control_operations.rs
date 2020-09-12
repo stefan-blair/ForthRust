@@ -8,12 +8,12 @@ pub fn set_interpret(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthRes
 pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.set_compilemode() }
 
 pub fn start_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let name = state.input_stream.next_word()?;
+    let word = state.input_stream.next_word()?;
     let address = state.memory.top();
     let execution_token = evaluate::definition::ExecutionToken::DefinedOperation(address);
 
     // the IMMEDIATE keyword will edit the definition to be immediate
-    state.definitions.add(name, evaluate::definition::Definition::new(execution_token, false));
+    state.definitions.add(word, evaluate::definition::Definition::new(execution_token, false));
 
     set_compile(state)
 }
