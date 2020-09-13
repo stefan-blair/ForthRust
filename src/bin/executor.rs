@@ -85,4 +85,6 @@ fn main() {
     let file_path = std::env::args().nth(1).expect("Please provide an input path");
     let file = File::open(file_path).expect("File not found / able to be opened");
     assert!(Ok(()) == forth.evaluate_stream(FileStream::new(BufReader::new(file)), &mut output_stream));
+
+    assert!(Ok(()) == forth.evaluate_stream(StdinStream::new(), &mut StdoutStream::new()));
  }

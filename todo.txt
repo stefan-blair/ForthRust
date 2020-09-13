@@ -1,14 +1,27 @@
 
-add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization
+implementation:
 
-implement a replay debugger
+    compiled code can store arguments / parameters embedded right there
+    add in half words (4 bytes instead of 8)
+    maybe we can fully remove the notion of "CompiledCode" (as a boxed closure), and then merge all three of the forth state structs into one Forth struct
 
 
+debugger: 
+    
+    make some errors recoverable (maybe separate kernel)
+    implement a replay debugger by tracking 
+    remove all of the unwraps from Debugger
+    Make the debugger into an optional feature
+    Check if starts with H and then add the format in
 
-remove all of the unwraps from Debugger
-write tests for bytes, doubles, create, allot
 
-make errors recoverable
+noteable abscent words:
 
-Make the debugger into an optional feature
-Check if starts with H and then add the format in
+    EVALUATE: literally evaluate a string on the stack
+    COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just pusts the execution token.  but if its something like `+`, it literally compiles the code into it
+    STATE:    returns address of state, which contains a 1 if in compilation state, and 0 if in interpret state
+
+optimization ideas:
+
+    tail-call optimization
+    add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization

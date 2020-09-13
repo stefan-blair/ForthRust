@@ -547,3 +547,49 @@ fn print_size_test() {
     assert!(f.evaluate_string("-1 -1 UM+ D.", &mut output_stream).is_ok());
     assert_eq!("36893488147419103230 ", output_stream.consume());    
 }
+
+#[test]
+fn custom_constant_test() {
+    let mut output_stream = output_stream::BufferedOutputStream::new();
+    let mut f = Forth::<kernels::DefaultKernel>::new();
+    assert!(f.evaluate_string(": const create , does> @ ;", &mut output_stream).is_ok());
+    assert!(f.evaluate_string("5 const frank frank", &mut output_stream).is_ok());
+    assert_eq!(vec![5], stack_to_vec(&mut f.state.stack));    
+}
+
+#[test]
+fn materials_program_test() {
+    let mut output_stream = output_stream::BufferedOutputStream::new();
+    let mut f = Forth::<kernels::DefaultKernel>::new();
+    assert!(f.evaluate_string("\\ \"No Weighting\" from Starting Forth Chapter 12
+    VARIABLE DENSITY
+    VARIABLE THETA
+    VARIABLE ID
+    
+    : \" ( -- addr )   [CHAR] \" WORD DUP C@ 1+ ALLOT ;
+    
+    : MATERIAL ( addr n1 n2 -- )    \\ addr=string, n1=density, n2=theta
+       CREATE  , , , 
+       DOES> ( -- )   DUP @ THETA !
+       CELL+ DUP @ DENSITY !  CELL+ @ ID ! ;
+    
+    : .SUBSTANCE ( -- )   ID @ COUNT TYPE ;
+    : FOOT ( n1 -- n2 )   10 * ;
+    : INCH ( n1 -- n2 )   100 12 */  5 +  10 /  + ;
+    : /TAN ( n1 -- n2 )   1000 THETA @ */ ;
+    
+    : PILE ( n -- )         \\ n=scaled height
+       DUP DUP 10 */ 1000 */  355 339 */  /TAN /TAN
+       DENSITY @ 200 */  .\" = \" . .\" tons of \"  .SUBSTANCE ;
+    
+    \\ table of materials
+    \\   string-address  density  tan[theta] 
+       \" cement\"           131        700  MATERIAL CEMENT
+       \" loose gravel\"      93        649  MATERIAL LOOSE-GRAVEL
+       \" packed gravel\"    100        700  MATERIAL PACKED-GRAVEL
+       \" dry sand\"          90        754  MATERIAL DRY-SAND
+       \" wet sand\"         118        900  MATERIAL WET-SAND
+       \" clay\"             120        727  MATERIAL CLAY", &mut output_stream).is_ok());
+    assert!(f.evaluate_string("cement 10 foot pile 10 foot 3 inch pile dry-sand 10 foot pile", &mut output_stream).is_ok());
+    assert_eq!("= 138 tons of cement= 151 tons of cement= 81 tons of dry sand", output_stream.consume());
+}

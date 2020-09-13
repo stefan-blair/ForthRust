@@ -46,6 +46,12 @@ pub fn type_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResul
     Ok(())
 }
 
+pub fn emit(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+    let ascii_char = state.stack.pop::<generic_numbers::UnsignedByte>()? as char;
+    state.output_stream.write(&format!("{}", ascii_char));
+    Ok(())
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         (".", false, pop_and_print::<generic_numbers::Number>),
@@ -55,5 +61,6 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         (".\"", true, print_string),
         ("CR", false, print_newline),
         ("TYPE", false, type_string),
+        ("EMIT", false, emit),
     ]
 }

@@ -108,7 +108,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("EXECUTE", false, execute),
         ("'", false, read_execution_token),
         (">BODY", false, body),
-        ("[`]", true, get_execution_token),
+        ("[']", true, get_execution_token),
         ("(", true, absorb_comment!(')')),
         ("\\", true, absorb_comment!('\n')),
         // branch generators
