@@ -56,7 +56,7 @@ pub trait SignedGenericNumber: GenericNumber {
 }
 
 macro_rules! generic_number {
-    ($name:ident, $type:ty) => {
+    ($name:ident, $type:ty, $cells: expr) => {
         // create a type alias so that $name can be used instead, and $type can change without breaking code
         pub type $name = $type;
 
@@ -94,14 +94,14 @@ macro_rules! generic_number {
                 memory.push_number_by_type(self)
             }
 
-            fn null() -> Self {
-                0
+            fn size() -> memory::Offset {
+                $cells
             }
         }
     };
 
-    ($name:ident, $type:ty, $unsigned_name:ident, $unsigned_type:ty) => {
-        generic_number!($name, $type);
+    ($name:ident, $type:ty, $unsigned_name:ident, $unsigned_type:ty, $cells: expr) => {
+        generic_number!($name, $type, $cells);
 
         /**
          * Implement the GenericNumber trait for the unsigned version of the number, this time simply wrapping the 
@@ -140,8 +140,8 @@ macro_rules! generic_number {
                 memory.push_number_by_type(self as $name)
             }
 
-            fn null() -> Self {
-                0
+            fn size() -> memory::Offset {
+                $cells
             }
         }
 
@@ -156,9 +156,9 @@ macro_rules! generic_number {
     };
 }
 
-generic_number!(Byte, i8, UnsignedByte, u8);
-generic_number!(Number, i64, UnsignedNumber, u64);
-generic_number!(DoubleNumber, i128, UnsignedDoubleNumber, u128);
+generic_number!(Byte, i8, UnsignedByte, u8, 1);
+generic_number!(Number, i64, UnsignedNumber, u64, 1);
+generic_number!(DoubleNumber, i128, UnsignedDoubleNumber, u128, 2);
 
 /**
  * Syntactic sugar for Value::Number(_).  The other value types all have similar functions.

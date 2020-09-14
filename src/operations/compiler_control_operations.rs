@@ -10,7 +10,7 @@ pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResul
 pub fn start_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
     let address = state.memory.top();
-    let execution_token = evaluate::definition::ExecutionToken::DefinedOperation(address);
+    let execution_token = evaluate::definition::ExecutionToken::CallAddress(address);
 
     // the IMMEDIATE keyword will edit the definition to be immediate
     state.definitions.add(word, evaluate::definition::Definition::new(execution_token, false));
@@ -26,24 +26,16 @@ pub fn end_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::F
 pub fn postpone(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let definition = state.definitions.get_from_token(state.input_stream.next()?)?;
 
-    let xt = if definition.immediate {
-        definition.execution_token
+    if definition.immediate {
+        Ok(state.memory.push(definition.execution_token))
     } else {
-        state.compiled_code.add_compiled_code(Box::new(move |state| {
-            state.memory.push(definition.execution_token.value());
-            Result::Ok(())
-        }))
-    };
-
-    state.memory.push(xt.value());
-
-    Result::Ok(())
+        compiled_instructions::InstructionCompiler::with_state(state).mem_push(definition.execution_token.value())
+    }
 }
 
 pub fn literal(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(state.stack.pop::<value::Value>()?));
-    state.memory.push(xt.value());
-    Result::Ok(())
+    let value = state.stack.pop::<value::Value>()?;
+    compiled_instructions::InstructionCompiler::with_state(state).push(value)
 }
 
 pub fn execute(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
@@ -61,34 +53,29 @@ pub fn read_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::F
 pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.input_stream.next()
         .and_then(|token| state.definitions.get_from_token(token))
-        .map(|definition| {
-            let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::push_value(definition.execution_token.value()));
-            state.memory.push(xt.value());
-        })
+        .and_then(|definition| compiled_instructions::InstructionCompiler::with_state(state).push(definition.execution_token.value()))
 }
 
 /**
  * Generates a bne instruction.  Pops an address off of the stack to be the destination for the branch.
  * Pushes the execution token of this branch instruction onto the stack.
  */
-pub fn push_branch_false_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = state.stack.pop()?;
-    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_false_instruction(address));
-    state.stack.push(xt);
-    Result::Ok(())            
+pub fn write_branch_false(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+    let branch_target = state.stack.pop()?;
+    let destination = state.stack.pop()?;
+    compiled_instructions::InstructionCompiler::with_state(state).with_address(destination).branch_false(branch_target)
 }
 
-pub fn push_branch_instruction(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let address = state.stack.pop()?;
-    let xt = state.compiled_code.add_compiled_code(super::code_compiler_helpers::create_branch_instruction(address));
-    state.stack.push(xt);
-    Result::Ok(())            
+pub fn write_branch(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+    let branch_target = state.stack.pop()?;
+    let destination = state.stack.pop()?;
+    compiled_instructions::InstructionCompiler::with_state(state).with_address(destination).branch(branch_target)
 }
 
 pub fn body(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let xt = state.stack.pop()?;
     match xt {
-        evaluate::definition::ExecutionToken::DefinedOperation(address) => state.stack.push(address),
+        evaluate::definition::ExecutionToken::CallAddress(address) => state.stack.push(address),
         evaluate::definition::ExecutionToken::Number(i) => state.stack.push(i),
         _ => state.stack.push(xt)
     };
@@ -112,7 +99,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("(", true, absorb_comment!(')')),
         ("\\", true, absorb_comment!('\n')),
         // branch generators
-        ("_BNE", false, push_branch_false_instruction),
-        ("_B", false, push_branch_instruction),
+        ("_BNE", false, write_branch_false),
+        ("_B", false, write_branch),
     ]
 }

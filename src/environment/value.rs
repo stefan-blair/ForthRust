@@ -5,12 +5,14 @@ use crate::evaluate::{self, Error};
 
 
 pub trait ValueVariant: std::marker::Sized + Copy + Clone {
+    // connector functions used for stack and memory operations
     fn push_to_stack(self, stack: &mut stack::Stack);
     fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error>;
     fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error>;
     fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error>;
     fn push_to_memory(self, memory: &mut memory::Memory);
-    fn null() -> Self;
+    // the size, in number of cells (aka, the size of one Value)
+    fn size() -> memory::Offset;
 }
 
 #[derive(Copy, Clone)]
@@ -49,8 +51,8 @@ impl ValueVariant for Value {
         memory.push_value(self)
     }
 
-    fn null() -> Self {
-        Self::Number(0)
+    fn size() -> memory::Offset {
+        1
     }
 }
 
@@ -86,7 +88,7 @@ impl ValueVariant for DoubleValue {
         memory.push(self.1);
     }
 
-    fn null() -> Self {
-        Self(Value::null(), Value::null())
+    fn size() -> memory::Offset {
+        2
     }
 }

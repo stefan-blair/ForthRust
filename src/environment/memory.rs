@@ -96,8 +96,8 @@ impl ValueVariant for Address {
         memory.push(self.to_number())
     }
 
-    fn null() -> Self {
-        Self::from_offset(0)
+    fn size() -> Offset {
+        1
     }
 }
 
@@ -114,10 +114,6 @@ impl Memory {
 
     pub fn expand(&mut self, amount: Offset) {
         self.0.resize(self.0.len() + amount, 0.value())
-    }
-
-    pub fn push_none(&mut self) {
-        self.0.push(0.value());
     }
 
     pub fn check_address(&self, address: Address) -> Result<(), Error> {
@@ -157,6 +153,12 @@ impl Memory {
     
     pub fn push<T: value::ValueVariant>(&mut self, value: T) {
         value.push_to_memory(self);
+    }
+
+    pub fn push_none<T: value::ValueVariant>(&mut self) {
+        for _ in 0..T::size() {
+            self.0.push(0.value());
+        }
     }
 
     pub fn debug_only_get_vec<'a>(&'a self) -> &'a Vec<value::Value> {

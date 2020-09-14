@@ -18,7 +18,7 @@ pub fn read_string_to_memory(state: &mut ForthEvaluator, delimiter: char) -> For
             break;
         } else {
             if !string_address.less_than(state.memory.top()) {
-                state.memory.push_none();
+                state.memory.push_none::<value::Value>();
             }
             state.memory.write(string_address, next_char as generic_numbers::UnsignedByte)?;
             string_address.increment();

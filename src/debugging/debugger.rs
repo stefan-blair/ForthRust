@@ -138,5 +138,5 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
     }
 }
 
-const DEBUG_OPERATION_XT: definition::ExecutionToken = definition::ExecutionToken::Operation(debug);
+const DEBUG_OPERATION_XT: definition::ExecutionToken = definition::ExecutionToken::LeafOperation(debug);
 pub fn debug(_: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { Ok(()) }

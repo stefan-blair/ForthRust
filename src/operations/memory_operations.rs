@@ -4,32 +4,33 @@ use super::*;
 pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let address = state.stack.pop()?;
     state.stack.push(state.memory.read::<N>(address)?);
-    Result::Ok(())
+    Ok(())
 }
 
 pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let (address, value) = (state.stack.pop()?, state.stack.pop::<N>()?);
 
-    state.memory.write(address, value)?;
-    Result::Ok(())
+    state.memory.write(address, value)
 }
 
 pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.memory.push(state.stack.pop::<value::Value>()?);
-    Result::Ok(())
+    Ok(())
 }
 
 pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
     let nametag = state.definitions.get_nametag(&word)?;
 
-    state.memory.push(state.compiled_code.add_compiled_code(Box::new(move |state| {
+    compiled_instructions::InstructionCompiler::with_state(state).push(nametag.to_number())?;
+    state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+        let nametag = evaluate::definition::NameTag::from(state.stack.pop()?);
         let number = state.stack.pop::<generic_numbers::Number>()?;
         state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
-        Result::Ok(())
-    })).value());
+        Ok(())
+    }));
 
-    Result::Ok(())
+    Ok(())
 }
 
 macro_rules! generic_operations {

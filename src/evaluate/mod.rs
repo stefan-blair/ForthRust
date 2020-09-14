@@ -131,7 +131,7 @@ impl<'a> ForthState<'a> {
 
     pub fn add_operations(&mut self, operations: operations::OperationTable) {
         for (word, immediate, operation) in operations {
-            self.definitions.add(word.to_string(), definition::Definition::new(definition::ExecutionToken::Operation(operation), immediate));
+            self.definitions.add(word.to_string(), definition::Definition::new(definition::ExecutionToken::LeafOperation(operation), immediate));
         };
     }
 
@@ -195,9 +195,9 @@ pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
 impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
         match execution_token {
-            definition::ExecutionToken::DefinedOperation(address) => self.invoke_at(address),
-            definition::ExecutionToken::Operation(fptr) => fptr(self),
-            definition::ExecutionToken::CompiledOperation(_) => self.compiled_code.compiled_code.get(execution_token)(self),
+            definition::ExecutionToken::ThreadedDefinition(address) => self.invoke_at(address),
+            definition::ExecutionToken::LeafOperation(fptr) => fptr(self),
+            definition::ExecutionToken::CompiledInstruction(_) => self.compiled_code.compiled_code.get(execution_token)(self),
             definition::ExecutionToken::Number(i) => Ok(self.stack.push(i))
         }
     }

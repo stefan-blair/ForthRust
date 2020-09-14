@@ -23,12 +23,12 @@ impl<'a> CompiledCodeSegment<'a> {
 
     pub fn add(&mut self, compiled_code: CompiledCode<'a>) -> definition::ExecutionToken {
         self.compiled_code.push(compiled_code);
-        definition::ExecutionToken::CompiledOperation(self.compiled_code.len() - 1)
+        definition::ExecutionToken::CompiledInstruction(self.compiled_code.len() - 1)
     }
 
     pub fn get(&self, execution_token: definition::ExecutionToken) -> &CompiledCode {
         match execution_token {
-            definition::ExecutionToken::CompiledOperation(offset) => &self.compiled_code[offset],
+            definition::ExecutionToken::CompiledInstruction(offset) => &self.compiled_code[offset],
             _ => panic!("attempted to execute invalid execution token")
         }
     }
@@ -53,6 +53,6 @@ impl<'a, 'b> CompilingCodeSegment<'a, 'b> {
 
     pub fn add_compiled_code(&mut self, compiled_code: CompiledCode<'b>) -> definition::ExecutionToken {
         self.buffer.push(compiled_code);
-        definition::ExecutionToken::CompiledOperation(self.compiled_code.len() + self.buffer.len() - 1)
+        definition::ExecutionToken::CompiledInstruction(self.compiled_code.len() + self.buffer.len() - 1)
     }
 }

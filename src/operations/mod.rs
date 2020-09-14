@@ -1,6 +1,7 @@
 use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
 use crate::evaluate::{self, ForthResult, ForthEvaluator};
 
+mod compiled_instructions;
 pub mod control_flow_operations;
 mod arithmetic_operations;
 mod compiler_control_operations;
@@ -56,33 +57,8 @@ mod helper_macros {
     #[macro_export]
     macro_rules! postpone {
         ($state:expr, $execution_token:expr) => {
-            $state.memory.push(evaluate::definition::ExecutionToken::Operation($execution_token).value());
+            $state.memory.push(evaluate::definition::ExecutionToken::LeafOperation($execution_token).value());
         };
-    }
-}
-
-mod code_compiler_helpers {
-    use super::*;
-
-    pub fn create_branch_false_instruction<'a>(destination: memory::Address) -> evaluate::compiled_code::CompiledCode<'a> {
-        Box::new(move |state| {
-            if state.stack.pop::<generic_numbers::UnsignedNumber>()? > 0 {
-                Result::Ok(())
-            } else {
-                state.jump_to(destination)
-            }
-        })
-    }
-
-    pub fn create_branch_instruction<'a>(destination: memory::Address) -> evaluate::compiled_code::CompiledCode<'a> {
-        Box::new(move |state| state.jump_to(destination))
-    }
-
-    pub fn push_value<'a>(value: value::Value) -> evaluate::compiled_code::CompiledCode<'a> {
-        Box::new(move |state| {
-            state.stack.push(value);
-            Result::Ok(())
-        })
     }
 }
 
@@ -115,8 +91,8 @@ pub fn get_operations() -> OperationTable {
 pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     // if ... [else] ... then
     ": IF HERE 1 ALLOT ; IMMEDIATE",
-    ": ELSE POSTPONE 0 HERE 1 ALLOT SWAP HERE _BNE SWAP ! ; IMMEDIATE",
-    ": THEN HERE _BNE SWAP ! ; IMMEDIATE",
+    ": ELSE POSTPONE 0 HERE 1 ALLOT SWAP HERE _BNE ; IMMEDIATE",
+    ": THEN HERE _BNE ; IMMEDIATE",
     // get current index of do ... loop
     ": I R> R@ SWAP >R ;",
     // get next character

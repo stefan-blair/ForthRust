@@ -9,18 +9,18 @@ use super::Error;
 
 #[derive(Clone, Copy)]
 pub enum ExecutionToken {
-    Operation(operations::Operation),
-    CompiledOperation(memory::Offset),
-    DefinedOperation(memory::Address),
+    LeafOperation(operations::Operation),
+    CompiledInstruction(memory::Offset),
+    ThreadedDefinition(memory::Address),
     Number(generic_numbers::Number),
 }
 
 impl ExecutionToken {
     pub fn to_offset(self) -> memory::Offset {
         match self {
-            Self::Operation(fptr) => fptr as memory::Offset,
-            Self::CompiledOperation(i) => i,
-            Self::DefinedOperation(address) => address.to_offset(),
+            Self::LeafOperation(fptr) => fptr as memory::Offset,
+            Self::CompiledInstruction(i) => i,
+            Self::ThreadedDefinition(address) => address.to_offset(),
             Self::Number(i) => i as memory::Offset
         }
     }
@@ -33,10 +33,10 @@ impl ExecutionToken {
 impl Hash for ExecutionToken {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let index = match self {
-            Self::Operation(_) => 0,
-            Self::CompiledOperation(_) => 1,
-            Self::DefinedOperation(_) => 2,
-            Self::Number(_) => 3,
+            Self::LeafOperation(_) => 0,
+            Self::CompiledInstruction(_) => 1,
+            Self::ThreadedDefinition(_) => 2,
+            Self::Number(_) => 4,
         };
         index.hash(state);
         self.to_offset().hash(state);
@@ -46,9 +46,9 @@ impl Hash for ExecutionToken {
 impl PartialEq for ExecutionToken {
     fn eq(&self, other: &Self) -> bool {
         match (*self, *other) {
-            (Self::Operation(op_1), Self::Operation(op_2)) => (op_1 as usize) == (op_2 as usize),
-            (Self::CompiledOperation(offset_1), Self::CompiledOperation(offset_2)) => offset_1 == offset_2,
-            (Self::DefinedOperation(address_1), Self::DefinedOperation(address_2)) => address_1 == address_2,
+            (Self::LeafOperation(op_1), Self::LeafOperation(op_2)) => (op_1 as usize) == (op_2 as usize),
+            (Self::CompiledInstruction(offset_1), Self::CompiledInstruction(offset_2)) => offset_1 == offset_2,
+            (Self::ThreadedDefinition(address_1), Self::ThreadedDefinition(address_2)) => address_1 == address_2,
             (Self::Number(i), Self::Number(j)) => i == j,
             _ => false
         }
@@ -84,24 +84,32 @@ impl value::ValueVariant for ExecutionToken {
         memory.push_value(self.value())
     }
 
-    fn null() -> Self {
-        Self::Number(0)
+    fn size() -> memory::Offset {
+        1
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct NameTag(pub memory::Offset);
+pub struct NameTag(memory::Offset);
 
 impl NameTag {
+    pub fn from(index: generic_numbers::Number) -> Self {
+        Self(index as memory::Offset)
+    }
+
     pub fn to_offset(self) -> memory::Offset {
         self.0
+    }
+
+    pub fn to_number(self) -> generic_numbers::Number {
+        self.0 as generic_numbers::Number
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct Definition {
     pub immediate: bool,
-    pub execution_token: ExecutionToken
+    pub execution_token: ExecutionToken,
 }
 
 impl Definition {
@@ -170,9 +178,9 @@ impl DefinitionSet {
         fn equal(a: ExecutionToken, b: ExecutionToken) -> bool {
             match (a, b) {
                 (ExecutionToken::Number(a), ExecutionToken::Number(b)) => a == b,
-                (ExecutionToken::Operation(a), ExecutionToken::Operation(b)) => (a as usize) == (b as usize),
-                (ExecutionToken::DefinedOperation(a), ExecutionToken::DefinedOperation(b)) => a == b,
-                (ExecutionToken::CompiledOperation(a), ExecutionToken::CompiledOperation(b)) => a == b,
+                (ExecutionToken::LeafOperation(a), ExecutionToken::LeafOperation(b)) => (a as usize) == (b as usize),
+                (ExecutionToken::ThreadedDefinition(a), ExecutionToken::ThreadedDefinition(b)) => a == b,
+                (ExecutionToken::CompiledInstruction(a), ExecutionToken::CompiledInstruction(b)) => a == b,
                 _ => false
             }
         }
