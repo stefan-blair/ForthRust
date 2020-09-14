@@ -1,4 +1,6 @@
-use super::*;
+use crate::evaluate::{self, ForthResult};
+use crate::memory;
+use crate::environment::{generic_numbers, value};
 
 
 pub struct InstructionCompiler<'a, 'b, 'c, 'd, 'e, 'f, 'g> {

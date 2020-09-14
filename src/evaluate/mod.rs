@@ -1,10 +1,10 @@
-pub mod compiled_code;
 pub mod definition;
 pub mod kernels;
 
 use crate::operations;
 use crate::environment::{memory, stack};
 use crate::io::{tokens, output_stream};
+use crate::compiled_instructions;
 
 
 pub type ForthResult = Result<(), Error>;
@@ -99,7 +99,7 @@ impl<'a, KERNEL: kernels::Kernel> Forth<'a, KERNEL> {
  */
 pub struct ForthState<'a> {
     pub definitions: definition::DefinitionSet,
-    pub compiled_code: compiled_code::CompiledCodeSegment<'a>,
+    pub compiled_code: compiled_instructions::CompiledInstructions<'a>,
     // the return stack is not actually used as a return stack, but is still provided for other uses
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
@@ -116,7 +116,7 @@ pub struct ForthState<'a> {
 impl<'a> ForthState<'a> {
     pub fn new() -> Self {
         Self {
-            compiled_code: compiled_code::CompiledCodeSegment::new(),
+            compiled_code: compiled_instructions::CompiledInstructions::new(),
             definitions: definition::DefinitionSet::new(),
 
             return_stack: stack::Stack::new(),
@@ -179,7 +179,7 @@ pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     pub input_stream: &'i mut tokens::TokenStream<'t>,
     pub output_stream: &'o mut dyn output_stream::OutputStream,
 
-    pub compiled_code: compiled_code::CompilingCodeSegment<'a, 'b>,
+    pub compiled_code: compiled_instructions::CompilingInstructions<'a, 'b>,
 
     pub definitions: &'f mut definition::DefinitionSet,
 
@@ -195,7 +195,7 @@ pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
 impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
         match execution_token {
-            definition::ExecutionToken::ThreadedDefinition(address) => self.invoke_at(address),
+            definition::ExecutionToken::Definition(address) => self.invoke_at(address),
             definition::ExecutionToken::LeafOperation(fptr) => fptr(self),
             definition::ExecutionToken::CompiledInstruction(_) => self.compiled_code.compiled_code.get(execution_token)(self),
             definition::ExecutionToken::Number(i) => Ok(self.stack.push(i))

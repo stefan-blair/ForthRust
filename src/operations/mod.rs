@@ -1,7 +1,7 @@
 use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
 use crate::evaluate::{self, ForthResult, ForthEvaluator};
+use crate::compiled_instructions::instruction_compiler;
 
-mod compiled_instructions;
 pub mod control_flow_operations;
 mod arithmetic_operations;
 mod compiler_control_operations;

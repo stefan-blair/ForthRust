@@ -11,7 +11,7 @@ use super::Error;
 pub enum ExecutionToken {
     LeafOperation(operations::Operation),
     CompiledInstruction(memory::Offset),
-    ThreadedDefinition(memory::Address),
+    Definition(memory::Address),
     Number(generic_numbers::Number),
 }
 
@@ -20,7 +20,7 @@ impl ExecutionToken {
         match self {
             Self::LeafOperation(fptr) => fptr as memory::Offset,
             Self::CompiledInstruction(i) => i,
-            Self::ThreadedDefinition(address) => address.to_offset(),
+            Self::Definition(address) => address.to_offset(),
             Self::Number(i) => i as memory::Offset
         }
     }
@@ -35,7 +35,7 @@ impl Hash for ExecutionToken {
         let index = match self {
             Self::LeafOperation(_) => 0,
             Self::CompiledInstruction(_) => 1,
-            Self::ThreadedDefinition(_) => 2,
+            Self::Definition(_) => 2,
             Self::Number(_) => 4,
         };
         index.hash(state);
@@ -48,7 +48,7 @@ impl PartialEq for ExecutionToken {
         match (*self, *other) {
             (Self::LeafOperation(op_1), Self::LeafOperation(op_2)) => (op_1 as usize) == (op_2 as usize),
             (Self::CompiledInstruction(offset_1), Self::CompiledInstruction(offset_2)) => offset_1 == offset_2,
-            (Self::ThreadedDefinition(address_1), Self::ThreadedDefinition(address_2)) => address_1 == address_2,
+            (Self::Definition(address_1), Self::Definition(address_2)) => address_1 == address_2,
             (Self::Number(i), Self::Number(j)) => i == j,
             _ => false
         }
@@ -179,7 +179,7 @@ impl DefinitionSet {
             match (a, b) {
                 (ExecutionToken::Number(a), ExecutionToken::Number(b)) => a == b,
                 (ExecutionToken::LeafOperation(a), ExecutionToken::LeafOperation(b)) => (a as usize) == (b as usize),
-                (ExecutionToken::ThreadedDefinition(a), ExecutionToken::ThreadedDefinition(b)) => a == b,
+                (ExecutionToken::Definition(a), ExecutionToken::Definition(b)) => a == b,
                 (ExecutionToken::CompiledInstruction(a), ExecutionToken::CompiledInstruction(b)) => a == b,
                 _ => false
             }

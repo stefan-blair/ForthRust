@@ -10,7 +10,7 @@ pub fn set_compile(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResul
 pub fn start_word_compilation(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
     let address = state.memory.top();
-    let execution_token = evaluate::definition::ExecutionToken::CallAddress(address);
+    let execution_token = evaluate::definition::ExecutionToken::Definition(address);
 
     // the IMMEDIATE keyword will edit the definition to be immediate
     state.definitions.add(word, evaluate::definition::Definition::new(execution_token, false));
@@ -29,13 +29,13 @@ pub fn postpone(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     if definition.immediate {
         Ok(state.memory.push(definition.execution_token))
     } else {
-        compiled_instructions::InstructionCompiler::with_state(state).mem_push(definition.execution_token.value())
+        instruction_compiler::InstructionCompiler::with_state(state).mem_push(definition.execution_token.value())
     }
 }
 
-pub fn literal(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
-    let value = state.stack.pop::<value::Value>()?;
-    compiled_instructions::InstructionCompiler::with_state(state).push(value)
+pub fn literal<N: value::ValueVariant + 'static>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+    let value = state.stack.pop::<N>()?;
+    instruction_compiler::InstructionCompiler::with_state(state).push(value)
 }
 
 pub fn execute(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
@@ -53,7 +53,7 @@ pub fn read_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::F
 pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.input_stream.next()
         .and_then(|token| state.definitions.get_from_token(token))
-        .and_then(|definition| compiled_instructions::InstructionCompiler::with_state(state).push(definition.execution_token.value()))
+        .and_then(|definition| instruction_compiler::InstructionCompiler::with_state(state).push(definition.execution_token.value()))
 }
 
 /**
@@ -63,19 +63,19 @@ pub fn get_execution_token(state: &mut evaluate::ForthEvaluator) -> evaluate::Fo
 pub fn write_branch_false(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let branch_target = state.stack.pop()?;
     let destination = state.stack.pop()?;
-    compiled_instructions::InstructionCompiler::with_state(state).with_address(destination).branch_false(branch_target)
+    instruction_compiler::InstructionCompiler::with_state(state).with_address(destination).branch_false(branch_target)
 }
 
 pub fn write_branch(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let branch_target = state.stack.pop()?;
     let destination = state.stack.pop()?;
-    compiled_instructions::InstructionCompiler::with_state(state).with_address(destination).branch(branch_target)
+    instruction_compiler::InstructionCompiler::with_state(state).with_address(destination).branch(branch_target)
 }
 
 pub fn body(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let xt = state.stack.pop()?;
     match xt {
-        evaluate::definition::ExecutionToken::CallAddress(address) => state.stack.push(address),
+        evaluate::definition::ExecutionToken::Definition(address) => state.stack.push(address),
         evaluate::definition::ExecutionToken::Number(i) => state.stack.push(i),
         _ => state.stack.push(xt)
     };
@@ -91,7 +91,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         (":", false, start_word_compilation),
         (";", true, end_word_compilation),
         ("POSTPONE", true, postpone),
-        ("LITERAL", true, literal),
+        ("LITERAL", true, literal::<value::Value>),
         ("EXECUTE", false, execute),
         ("'", false, read_execution_token),
         (">BODY", false, body),

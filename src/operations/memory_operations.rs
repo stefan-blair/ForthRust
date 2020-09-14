@@ -22,7 +22,7 @@ pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
     let nametag = state.definitions.get_nametag(&word)?;
 
-    compiled_instructions::InstructionCompiler::with_state(state).push(nametag.to_number())?;
+    instruction_compiler::InstructionCompiler::with_state(state).push(nametag.to_number())?;
     state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
         let nametag = evaluate::definition::NameTag::from(state.stack.pop()?);
         let number = state.stack.pop::<generic_numbers::Number>()?;

@@ -19,7 +19,7 @@ pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evalua
 
     match xt {
         evaluate::definition::ExecutionToken::Number(n) => format!("push {}", n),
-        evaluate::definition::ExecutionToken::ThreadedDefinition(addr) => format!("{}(defined call @ {})", word, stringify_address(addr)),
+        evaluate::definition::ExecutionToken::Definition(addr) => format!("{}(defined call @ {})", word, stringify_address(addr)),
         evaluate::definition::ExecutionToken::CompiledInstruction(_) => format!("{}(call compiled operation)", word),
         evaluate::definition::ExecutionToken::LeafOperation(_) => format!("{}(builtin)", word),
     }
@@ -90,7 +90,7 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(us
     let (start, end) = range.unwrap_or((0, memory.len()));
     for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
         let current_address = environment::memory::Address::debug_only_from_cell(i as environment::memory::Offset);
-        let word = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::ThreadedDefinition(current_address)) {
+        let word = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::Definition(current_address)) {
             Some(word) => format!("definition of {}", word),
             None => match variables.iter().filter_map(|(word, addr)| if *addr == current_address {
                 Some(word)
@@ -230,7 +230,7 @@ pub(in super) fn see(_: &mut debugger::DebugState, debug_target: &mut evaluate::
     };
 
     io.output_stream.writeln(&stringify_execution_token(debug_target, definition.execution_token));
-    if let evaluate::definition::ExecutionToken::ThreadedDefinition(address) = definition.execution_token {
+    if let evaluate::definition::ExecutionToken::Definition(address) = definition.execution_token {
         let mut end = address;
         while {
             end.increment_cell();
