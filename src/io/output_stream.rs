@@ -3,7 +3,10 @@ use std::mem;
 
 pub trait OutputStream {
     fn write(&mut self, m: &str);
-    fn writeln(&mut self, m: &str);
+    fn writeln(&mut self, m: &str) {
+        self.write(m);
+        self.write("\n");
+    }
 }
 
 pub struct BufferedOutputStream {
@@ -26,11 +29,6 @@ impl OutputStream for BufferedOutputStream {
     fn write(&mut self, m: &str) {
         self.stream.push_str(m);
     }
-
-    fn writeln(&mut self, m: &str) {
-        self.stream.push_str(m);
-        self.stream.push('\n');
-    }
 }
 
 pub struct DropOutputStream {}
@@ -43,5 +41,24 @@ impl DropOutputStream {
 
 impl OutputStream for DropOutputStream {
     fn write(&mut self, _m: &str) {}
-    fn writeln(&mut self, _m: &str) {}
+}
+
+pub struct OptionalOutputStream<'a, 'b>(Option<&'a mut (dyn OutputStream + 'b)>);
+
+impl<'a, 'b> OptionalOutputStream<'a, 'b> {
+    pub fn empty() -> Self {
+        Self(None)
+    }
+
+    pub fn with(output_stream: &'a mut (dyn OutputStream + 'b)) -> Self {
+        Self(Some(output_stream))
+    }
+}
+
+impl<'a, 'b> OutputStream for OptionalOutputStream<'a, 'b> {
+    fn write(&mut self, m: &str) {
+        if let Some(output_stream) = self.0.as_mut() {
+            output_stream.write(m)
+        }
+    }
 }

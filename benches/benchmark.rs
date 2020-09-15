@@ -10,15 +10,16 @@ use test::Bencher;
 fn embedded_literal_sequential_test(b: &mut Bencher) {
     let mut output_stream = output_stream::BufferedOutputStream::new();
     let mut f = Forth::<kernels::DefaultKernel>::new();
+    f.set_output_stream(&mut output_stream);
     b.iter(move || {
         // create literals
         for i in 0..800 {
-            assert!(f.evaluate_string(&format!("{} : test{} literal . ;", i, i), &mut output_stream).is_ok());
+            assert!(f.evaluate_string(&format!("{} : test{} literal . ;", i, i)).is_ok());
         }
 
         for _ in 0..100 {
             for i in 0..800 {
-                assert!(f.evaluate_string(&format!("test{}", i), &mut output_stream).is_ok());
+                assert!(f.evaluate_string(&format!("test{}", i)).is_ok());
             }    
         }
     });
@@ -28,15 +29,16 @@ fn embedded_literal_sequential_test(b: &mut Bencher) {
 fn embedded_literal_reuse_test(b: &mut Bencher) {
     let mut output_stream = output_stream::BufferedOutputStream::new();
     let mut f = Forth::<kernels::DefaultKernel>::new();
+    f.set_output_stream(&mut output_stream);
     b.iter(move || {
         // create literals
         for i in 0..800 {
-            assert!(f.evaluate_string(&format!("{} : test{} literal . ;", i, i), &mut output_stream).is_ok());
+            assert!(f.evaluate_string(&format!("{} : test{} literal . ;", i, i)).is_ok());
         }
 
         for i in 0..800 {
             for _ in 0..100 {
-                assert!(f.evaluate_string(&format!("test{}", i), &mut output_stream).is_ok());
+                assert!(f.evaluate_string(&format!("test{}", i)).is_ok());
             }    
         }
     });
@@ -45,16 +47,16 @@ fn embedded_literal_reuse_test(b: &mut Bencher) {
 #[bench]
 fn compiled_literal_sequential_test(b: &mut Bencher) {
     let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new();
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
     b.iter(move || {
         // create literals
         for i in 0..800 {
-            assert!(f.evaluate_string(&format!("{} : test{} _literal . ;", i, i), &mut output_stream).is_ok());
+            assert!(f.evaluate_string(&format!("{} : test{} _literal . ;", i, i)).is_ok());
         }
 
         for _ in 0..100 {
             for i in 0..800 {
-                assert!(f.evaluate_string(&format!("test{}", i), &mut output_stream).is_ok());
+                assert!(f.evaluate_string(&format!("test{}", i)).is_ok());
             }    
         }
     });
@@ -63,16 +65,16 @@ fn compiled_literal_sequential_test(b: &mut Bencher) {
 #[bench]
 fn compiled_literal_reuse_test(b: &mut Bencher) {
     let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new();
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
     b.iter(move || {
         // create literals
         for i in 0..800 {
-            assert!(f.evaluate_string(&format!("{} : test{} _literal . ;", i, i), &mut output_stream).is_ok());
+            assert!(f.evaluate_string(&format!("{} : test{} _literal . ;", i, i)).is_ok());
         }
 
         for i in 0..800 {
             for _ in 0..100 {
-                assert!(f.evaluate_string(&format!("test{}", i), &mut output_stream).is_ok());
+                assert!(f.evaluate_string(&format!("test{}", i)).is_ok());
             }    
         }
     });

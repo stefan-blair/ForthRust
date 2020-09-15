@@ -1,17 +1,17 @@
 use super::*;
 
 
-pub fn pop_and_print<N: GenericNumber>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn pop_and_print<N: GenericNumber>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.output_stream.write(&format!("{:?} ", state.stack.pop::<N>()?));
     Result::Ok(())
 }
 
-pub fn print_newline(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn print_newline(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.output_stream.writeln("");
     Result::Ok(())
 }
 
-pub fn print_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn print_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
         // there must be an instruction pointer if its literally executing this
         let mut string_address = state.instruction_pointer.unwrap();
@@ -33,7 +33,7 @@ pub fn print_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
     string_operations::read_string_to_memory(state, '"')
 }
 
-pub fn type_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn type_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
@@ -45,7 +45,7 @@ pub fn type_string(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResul
     Ok(())
 }
 
-pub fn emit(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn emit(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let ascii_char = state.stack.pop::<generic_numbers::UnsignedByte>()? as char;
     state.output_stream.write(&format!("{}", ascii_char));
     Ok(())

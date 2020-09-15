@@ -1,6 +1,8 @@
 
 implementation:
 
+    REFACTOR KERNELS
+
     compiled code can store arguments / parameters embedded right there
     add in half words (4 bytes instead of 8)
     maybe we can fully remove the notion of "CompiledCode" (as a boxed closure), and then merge all three of the forth state structs into one Forth struct

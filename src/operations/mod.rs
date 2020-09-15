@@ -1,6 +1,7 @@
 use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
-use crate::evaluate::{self, ForthResult, ForthEvaluator};
+use crate::evaluate::{self, ForthResult, ForthState};
 use crate::compiled_instructions::instruction_compiler;
+use crate::io::output_stream::OutputStream;
 
 pub mod control_flow_operations;
 mod arithmetic_operations;
@@ -24,7 +25,7 @@ mod helper_macros {
     #[macro_export]
     macro_rules! maybe {
         ($v:expr) => {
-            |state: &mut evaluate::ForthEvaluator| if state.stack.peek::<value::Value>()?.to_number() > 0 {
+            |state: &mut evaluate::ForthState| if state.stack.peek::<value::Value>()?.to_number() > 0 {
                 $v(state)
             } else {
                 Ok(())                
@@ -63,7 +64,7 @@ mod helper_macros {
 }
 
 // built in operators; name, whether its immediate or not, and the function to execute
-pub type Operation = fn(&mut evaluate::ForthEvaluator) -> evaluate::ForthResult;
+pub type Operation = fn(&mut evaluate::ForthState) -> evaluate::ForthResult;
 pub type OperationTable = Vec<(&'static str, bool, Operation)>;
 
 /**

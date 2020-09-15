@@ -1,8 +1,8 @@
 use super::*;
 
-pub fn control_flow_break(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.return_from() }
+pub fn control_flow_break(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.return_from() }
 
-pub fn do_init_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn do_init_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     // make room for an instruction to be patched in later that will push the end address of the loop onto the stack, for use by leave instructions 
     state.memory.push_none::<value::Value>();
     // add an instruction to move the address from the stack to the return stack
@@ -16,7 +16,7 @@ pub fn do_init_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResu
     Result::Ok(())
 }
 
-pub fn loop_plus_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn loop_plus_compiletime(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     // push the loop runtime
     state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
         // pop off the step from the stack, and the range from the return stack
@@ -48,13 +48,13 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::
     state.memory.write(loop_address.minus_cell(3), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()))
 }
 
-pub fn loop_compiletime(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn loop_compiletime(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     // postpone pushing 1 onto the stack, which is the expected step value on the stack (+LOOP has an explicit step)
     state.memory.push(evaluate::definition::ExecutionToken::Number(1).value());
     loop_plus_compiletime(state)
 }
 
-pub fn begin_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn begin_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     // leave room for the leave instruction
     state.memory.push_none::<value::Value>();
     postpone!(state, stack_operations::stack_to_return_stack::<value::Value>);
@@ -63,7 +63,7 @@ pub fn begin_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult
     Result::Ok(())
 }
 
-pub fn until_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn until_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let loop_address = state.stack.pop()?;
     instruction_compiler::InstructionCompiler::with_state(state).branch_false(loop_address)?;
 
@@ -71,7 +71,7 @@ pub fn until_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult
     state.memory.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()))
 }
 
-pub fn again_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn again_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let loop_address = state.stack.pop()?;
     instruction_compiler::InstructionCompiler::with_state(state).branch(loop_address)?;
 
@@ -79,13 +79,13 @@ pub fn again_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult
     state.memory.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()))
 }
 
-pub fn while_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn while_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.stack.push(state.memory.top().to_number());
     state.memory.push_none::<value::Value>();
     Result::Ok(())
 }
 
-pub fn repeat_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn repeat_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let branch_address = state.stack.pop()?;
 
     // add a branch instruction to the beginning of the loop unconditionally
@@ -100,7 +100,7 @@ pub fn repeat_loop(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResul
     state.memory.write(loop_start_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.memory.top().to_number()))
 }
 
-pub fn leave(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn leave(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.return_stack.pop::<value::DoubleValue>()?;
     let end_of_loop_address = state.return_stack.pop()?;
     state.jump_to(end_of_loop_address)

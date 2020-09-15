@@ -7,16 +7,16 @@ use crate::environment::{memory};
 use super::debug_operations;
 
 
-pub struct DebugState<'a> {
+pub struct DebugState<'a, 'i, 'ro, 'o> {
     pub debugging: bool,
     pub stepping: bool,
     pub breakpoints: Vec<memory::Address>,
     pub current_error: Option<evaluate::Error>,
-    pub forth: evaluate::Forth<'a, kernels::DefaultKernel>,
+    pub forth: evaluate::Forth<'a, 'i, 'ro, 'o, kernels::DefaultKernel>,
     pub debug_operations: HashMap<String, debug_operations::DebugOperation>,
 }
 
-impl <'a> DebugState<'a> {
+impl <'a, 'i, 'ro, 'o> DebugState<'a, 'i, 'ro, 'o> {
     fn new() -> Self {
         Self {
             debugging: false,
@@ -29,47 +29,47 @@ impl <'a> DebugState<'a> {
     }
 
     fn debug(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-        // initially display the state of execution
-        let input_stream = io.input_stream;
-        let output_stream = io.output_stream;
-        debug_operations::view_state(self, state, evaluate::ForthIO { input_stream, output_stream });
+        // // initially display the state of execution
+        // let input_stream = io.input_stream;
+        // let output_stream = io.output_stream;
+        // debug_operations::view_state(self, state, evaluate::ForthIO { input_stream, output_stream });
 
-        // await and execute debug commands
-        self.debugging = true;
-        while self.debugging {
-            let result = match self.forth.evaluate(input_stream, output_stream) {
-                Result::Err(evaluate::Error::UnknownWord(word)) => {
-                    match self.debug_operations.get(&word).ok_or(evaluate::Error::UnknownWord(word)) {
-                    Ok(op) => Ok(op(self, state, evaluate::ForthIO { input_stream, output_stream })),
-                    error => error.map(|_|())
-                }}
-                result => {
-                    result
-                }
-            };
+        // // await and execute debug commands
+        // self.debugging = true;
+        // while self.debugging {
+        //     let result = match self.forth.evaluate(input_stream) {
+        //         Result::Err(evaluate::Error::UnknownWord(word)) => {
+        //             match self.debug_operations.get(&word).ok_or(evaluate::Error::UnknownWord(word)) {
+        //             Ok(op) => Ok(op(self, state, evaluate::ForthIO { input_stream, output_stream })),
+        //             error => error.map(|_|())
+        //         }}
+        //         result => {
+        //             result
+        //         }
+        //     };
 
-            if let Result::Err(_) = result {
-                break;
-            }
-        }
+        //     if let Result::Err(_) = result {
+        //         break;
+        //     }
+        // }
     }    
 }
 
-pub struct DebugKernel<'a, NK: kernels::Kernel> {
-    debug_state: DebugState<'a>,
+pub struct DebugKernel<'a, 'i, 'ro, 'o, NK: kernels::Kernel> {
+    debug_state: DebugState<'a, 'i, 'ro, 'o>,
     input_stream: Option<io::tokens::TokenStream<'a>>,
     output_stream: Option<Box<dyn io::output_stream::OutputStream + 'a>>,
     next_kernel: NK
 }
 
-impl<'a, NK: kernels::Kernel> DebugKernel<'a, NK> {
+impl<'a, 'i, 'ro, 'o, NK: kernels::Kernel> DebugKernel<'a, 'i, 'ro, 'o, NK> {
     pub fn init_io<I: Iterator<Item = char> + 'a, O: io::output_stream::OutputStream + 'a>(&mut self, input: I, output: O) {
         self.input_stream = Some(io::tokens::TokenStream::new(input));
         self.output_stream = Some(Box::new(output));
     }
 }
 
-impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
+impl<'a, 'i, 'ro, 'o, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, 'i, 'ro, 'o, NK> {
     type NextKernel = NK;
     fn new(state: &mut evaluate::ForthState) -> Self {
         state.add_operations(vec![
@@ -85,7 +85,7 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
 
     fn get_next_kernel(&mut self) -> &mut Self::NextKernel { &mut self.next_kernel }
 
-    fn evaluate(&mut self, state: &mut evaluate::ForthState, _: evaluate::ForthIO) -> evaluate::ForthResult {
+    fn evaluate(&mut self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
         let io = if let (Some(input), Some(output)) = (self.input_stream.as_mut(), self.output_stream.as_mut().map(|x| x.as_mut())) {
             evaluate::ForthIO::new(input, output)
         } else {
@@ -117,7 +117,7 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
         self.debug_state.current_error.take().map_or_else(|| Ok(()), |error| Err(error))
     }
 
-    fn handle_error(&mut self, state: &mut evaluate::ForthState, _: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 
+    fn handle_error(&mut self, state: &mut evaluate::ForthState, error: evaluate::Error) -> evaluate::ForthResult { 
         let io = if let (Some(input), Some(output)) = (self.input_stream.as_mut(), self.output_stream.as_mut().map(|x| x.as_mut())) {
             evaluate::ForthIO::new(input, output)
         } else {
@@ -139,4 +139,4 @@ impl<'a, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, NK> {
 }
 
 const DEBUG_OPERATION_XT: definition::ExecutionToken = definition::ExecutionToken::LeafOperation(debug);
-pub fn debug(_: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { Ok(()) }
+pub fn debug(_: &mut evaluate::ForthState) -> evaluate::ForthResult { Ok(()) }

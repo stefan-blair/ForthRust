@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::evaluate::{self, definition, kernels};
-use crate::io;
+use crate::io::output_stream::OutputStream;
 use super::debug_operations;
 
 
@@ -23,10 +23,10 @@ impl ProfilerInformation {
         }
     }
 
-    pub fn dump_statistics(&self, state: &evaluate::ForthState, output_stream: &mut dyn io::output_stream::OutputStream) {
-        output_stream.writeln(&format!("total instructions: {}", self.total_instruction_count));
+    pub fn dump_statistics(&self, state: &mut evaluate::ForthState) {
+        state.output_stream.writeln(&format!("total instructions: {}", self.total_instruction_count));
         for (instruction, count) in self.instruction_counts.iter() {
-            output_stream.writeln(&format!("   {:>30}: {}", debug_operations::stringify_execution_token(state, *instruction), count));
+            state.output_stream.writeln(&format!("   {:>30}: {}", debug_operations::stringify_execution_token(state, *instruction), count));
         }
     }
 }
@@ -72,7 +72,7 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
 
     fn get_next_kernel(&mut self) -> &mut Self::NextKernel { &mut self.next_kernel }
 
-    fn evaluate(&mut self, state: &mut evaluate::ForthState, _: evaluate::ForthIO) -> evaluate::ForthResult {
+    fn evaluate(&mut self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
         state.current_instruction.map(|current_instruction| {
             self.global_information.record_instruction(current_instruction);
 
@@ -110,7 +110,7 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
         Ok(()) 
     }
 
-    fn handle_error(&mut self, state: &mut evaluate::ForthState, io: evaluate::ForthIO, error: evaluate::Error) -> evaluate::ForthResult { 
+    fn handle_error(&mut self, state: &mut evaluate::ForthState, error: evaluate::Error) -> evaluate::ForthResult { 
         match error {
             evaluate::Error::UnknownWord(word) if &word == "PROFILE_START" => {
                 self.recording = true;
@@ -121,22 +121,22 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
             evaluate::Error::UnknownWord(word) if &word == "PROFILE_END" => {
                 self.recording = false;
                 self.profiling_word = None;
-                self.local_information.dump_statistics(state, io.output_stream);
+                self.local_information.dump_statistics(state);
                 Ok(())
             }
             evaluate::Error::UnknownWord(word) if &word == "PROFILE_STATS" => {
-                io.output_stream.writeln("Global Profiling Stats:");
-                self.global_information.dump_statistics(state, io.output_stream);
-                io.output_stream.writeln("Local Profiling Stats:");
-                self.local_information.dump_statistics(state, io.output_stream);
+                state.output_stream.writeln("Global Profiling Stats:");
+                self.global_information.dump_statistics(state);
+                state.output_stream.writeln("Local Profiling Stats:");
+                self.local_information.dump_statistics(state);
                 Ok(())
             }
             evaluate::Error::UnknownWord(word) if &word == "PROFILE_WORD" => {
-                match io.input_stream.next().and_then(|token| state.definitions.get_from_token(token)).map(|definition| definition.execution_token) {
+                match state.input_stream.next().and_then(|token| state.definitions.get_from_token(token)).map(|definition| definition.execution_token) {
                     Ok(execution_token) => {
                         self.profiling_word = Some(ProfilingWord::new(execution_token));
                         self.local_information = ProfilerInformation::new();
-                        io.output_stream.writeln(&format!("Profiling {}", debug_operations::stringify_execution_token(state, execution_token)));
+                        state.output_stream.writeln(&format!("Profiling {}", debug_operations::stringify_execution_token(state, execution_token)));
                         Ok(())
                     }
                     Err(error) => Err(error)

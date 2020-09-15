@@ -1,14 +1,14 @@
 use super::*;
 
 
-pub fn get_char(state: &mut ForthEvaluator) -> ForthResult {
+pub fn get_char(state: &mut ForthState) -> ForthResult {
     let c = state.input_stream.next_char()?;
 
     state.stack.push(c as generic_numbers::Byte);
     Ok(())
 }
 
-pub fn read_string_to_memory(state: &mut ForthEvaluator, delimiter: char) -> ForthResult {
+pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthResult {
     let length_address = state.memory.top();
     let mut string_address = length_address.plus(1);
     let mut length: generic_numbers::UnsignedByte = 0;
@@ -30,13 +30,13 @@ pub fn read_string_to_memory(state: &mut ForthEvaluator, delimiter: char) -> For
     Ok(())
 }
 
-pub fn get_word(state: &mut ForthEvaluator) -> ForthResult {
+pub fn get_word(state: &mut ForthState) -> ForthResult {
     let delimiter = state.stack.pop::<generic_numbers::UnsignedByte>()? as char;
     let address = state.memory.top();
     read_string_to_memory(state, delimiter).map(|_| state.stack.push(address))
 }
 
-pub fn trailing(state: &mut ForthEvaluator) -> ForthResult {
+pub fn trailing(state: &mut ForthState) -> ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
@@ -54,7 +54,7 @@ pub fn trailing(state: &mut ForthEvaluator) -> ForthResult {
     Ok(())
 }
 
-pub fn cmove(state: &mut ForthEvaluator) -> ForthResult {
+pub fn cmove(state: &mut ForthState) -> ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
@@ -67,7 +67,7 @@ pub fn cmove(state: &mut ForthEvaluator) -> ForthResult {
     Ok(())
 }
 
-pub fn cmove_backwards(state: &mut ForthEvaluator) -> ForthResult {
+pub fn cmove_backwards(state: &mut ForthState) -> ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
@@ -80,7 +80,7 @@ pub fn cmove_backwards(state: &mut ForthEvaluator) -> ForthResult {
     Ok(())
 }
 
-pub fn move_noclobber(state: &mut ForthEvaluator) -> ForthResult {
+pub fn move_noclobber(state: &mut ForthState) -> ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
@@ -97,7 +97,7 @@ pub fn move_noclobber(state: &mut ForthEvaluator) -> ForthResult {
     Ok(())
 }
 
-pub fn accept(state: &mut ForthEvaluator) -> ForthResult {
+pub fn accept(state: &mut ForthState) -> ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
@@ -116,7 +116,7 @@ pub fn accept(state: &mut ForthEvaluator) -> ForthResult {
     Ok(())
 }
 
-pub fn count(state: &mut ForthEvaluator) -> ForthResult {
+pub fn count(state: &mut ForthState) -> ForthResult {
     let address: memory::Address = state.stack.pop()?;
     
     let length = state.memory.read::<generic_numbers::UnsignedByte>(address)?;

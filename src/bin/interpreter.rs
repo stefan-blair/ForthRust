@@ -53,11 +53,11 @@ impl output_stream::OutputStream for StdoutStream {
 fn main() {
 
     let mut output_stream = StdoutStream::new();
-    let mut forth = Forth::<profiler::ProfilerKernel<debugger::DebugKernel<kernels::DefaultKernel>>>::new();
+    let mut forth = Forth::<profiler::ProfilerKernel<debugger::DebugKernel<kernels::DefaultKernel>>>::new().with_output_stream(&mut output_stream);
     forth.kernel.get_next_kernel().init_io(StdinStream::new(), StdoutStream::new());
  
-    let result = forth.evaluate_stream(StdinStream::new(), &mut output_stream);
+    let result = forth.evaluate_stream(StdinStream::new());
     println!("Finished evaluating: {:?}", result);
 
-    forth.kernel.global_information.dump_statistics(&forth.state, &mut output_stream);
+    forth.kernel.global_information.dump_statistics(&mut forth.state);
 }

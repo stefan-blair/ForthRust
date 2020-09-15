@@ -79,12 +79,12 @@ impl output_stream::OutputStream for StdoutStream {
 
 fn main() {
     let mut output_stream = StdoutStream::new();
-    let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new();
+    let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new().with_output_stream(&mut output_stream);
     forth.kernel.init_io(StdinStream::new(), StdoutStream::new());
  
     let file_path = std::env::args().nth(1).expect("Please provide an input path");
     let file = File::open(file_path).expect("File not found / able to be opened");
-    assert!(Ok(()) == forth.evaluate_stream(FileStream::new(BufReader::new(file)), &mut output_stream));
+    assert!(Ok(()) == forth.evaluate_stream(FileStream::new(BufReader::new(file))));
 
-    assert!(Ok(()) == forth.evaluate_stream(StdinStream::new(), &mut StdoutStream::new()));
+    assert!(Ok(()) == forth.evaluate_stream(StdinStream::new()));
  }

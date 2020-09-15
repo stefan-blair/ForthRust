@@ -11,6 +11,10 @@ impl<'a> TokenStream<'a> {
         Self { stream: Box::new(stream) }
     }
 
+    pub fn empty() -> Self {
+        Self { stream: Box::new(std::iter::empty()) }
+    }
+
     pub fn next(&mut self) -> Result<Token, Error> {
         let mut s = String::new();
         if let Some(c) = self.stream.find(|c| !c.is_whitespace()) {

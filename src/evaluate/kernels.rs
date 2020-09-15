@@ -1,4 +1,4 @@
-use super::{ForthState, ForthResult, ForthIO, Error};
+use super::{ForthState, ForthResult, Error};
 
 
 /**
@@ -10,16 +10,16 @@ pub trait Kernel {
     fn new(state: &mut ForthState) -> Self;
     fn get_next_kernel(&mut self) -> &mut Self::NextKernel;
 
-    fn evaluate(&mut self, _state: &mut ForthState, _io: ForthIO) -> ForthResult { Ok(()) }
-    fn evaluate_chain(&mut self, state: &mut ForthState, io: ForthIO) -> ForthResult {
-        self.evaluate(state, ForthIO { input_stream: io.input_stream, output_stream: io.output_stream })
-            .and_then(|_| self.get_next_kernel().evaluate_chain(state, io))
+    fn evaluate(&mut self, _state: &mut ForthState) -> ForthResult { Ok(()) }
+    fn evaluate_chain(&mut self, state: &mut ForthState) -> ForthResult {
+        self.evaluate(state)
+            .and_then(|_| self.get_next_kernel().evaluate_chain(state))
     }
 
-    fn handle_error(&mut self, _state: &mut ForthState, _io: ForthIO, error: Error) -> ForthResult { Err(error) }
-    fn handle_error_chain(&mut self, state: &mut ForthState, io: ForthIO, error: Error) -> ForthResult {
-        self.handle_error(state, ForthIO { input_stream: io.input_stream, output_stream: io.output_stream}, error)
-            .or_else(|error| self.get_next_kernel().handle_error(state, io, error))
+    fn handle_error(&mut self, _state: &mut ForthState, error: Error) -> ForthResult { Err(error) }
+    fn handle_error_chain(&mut self, state: &mut ForthState, error: Error) -> ForthResult {
+        self.handle_error(state, error)
+            .or_else(|error| self.get_next_kernel().handle_error(state, error))
     }
 }
 
@@ -30,7 +30,7 @@ impl Kernel for DefaultKernel {
         Self() 
     }
     fn get_next_kernel(&mut self) -> &mut Self::NextKernel { self }
-    fn evaluate(&mut self, _: &mut ForthState, _: ForthIO) -> ForthResult { Ok(()) }
-    fn evaluate_chain(&mut self, _: &mut ForthState, _: ForthIO) -> ForthResult { Ok(()) }
-    fn handle_error_chain(&mut self, _: &mut ForthState, _: ForthIO, error: Error) -> ForthResult { Err(error) }
+    fn evaluate(&mut self, _: &mut ForthState) -> ForthResult { Ok(()) }
+    fn evaluate_chain(&mut self, _: &mut ForthState) -> ForthResult { Ok(()) }
+    fn handle_error_chain(&mut self, _: &mut ForthState, error: Error) -> ForthResult { Err(error) }
 }

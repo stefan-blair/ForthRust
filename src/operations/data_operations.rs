@@ -4,16 +4,16 @@ use crate::postpone;
 use evaluate::definition;
 
 
-pub fn here(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { state.stack.push(state.memory.top().to_number()); Ok(()) }
+pub fn here(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.stack.push(state.memory.top().to_number()); Ok(()) }
 
-pub fn allot(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult { 
+pub fn allot(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
     let total_memory = state.stack.pop::<generic_numbers::UnsignedNumber>()? as memory::Offset;
     let cells = (total_memory + memory::CELL_SIZE - 1) / memory::CELL_SIZE;
     state.memory.expand(cells as memory::Offset); 
     Ok(()) 
 }
 
-pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn create(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
     let address = state.memory.top().plus_cell(3);
@@ -26,11 +26,11 @@ pub fn create(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     Ok(())
 }
 
-pub fn variable<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn variable<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     create(state).and_then(|_| Ok(state.memory.push_none::<N>()))
 }
 
-pub fn constant<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn constant<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
     let address = state.memory.top();
@@ -46,7 +46,7 @@ pub fn constant<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) ->
     Ok(())
 }
 
-pub fn does(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn does(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let object_address = if let definition::ExecutionToken::Definition(address) = state.definitions.get(state.definitions.get_most_recent_nametag()).execution_token {
         address
     } else {
@@ -59,7 +59,7 @@ pub fn does(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     state.return_from()
 }
 
-pub fn value(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn value(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
     let number = state.stack.pop::<generic_numbers::Number>()?;
@@ -68,7 +68,7 @@ pub fn value(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
     Ok(())
 }
 
-pub fn cells(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn cells(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let number = state.stack.pop::<generic_numbers::UnsignedNumber>()? as memory::Offset;
     state.stack.push((number * memory::CELL_SIZE) as generic_numbers::UnsignedNumber);
     Ok(())

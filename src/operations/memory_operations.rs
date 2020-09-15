@@ -1,24 +1,24 @@
 use super::*;
 
 
-pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let address = state.stack.pop()?;
     state.stack.push(state.memory.read::<N>(address)?);
     Ok(())
 }
 
-pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let (address, value) = (state.stack.pop()?, state.stack.pop::<N>()?);
 
     state.memory.write(address, value)
 }
 
-pub fn pop_write(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn pop_write(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.memory.push(state.stack.pop::<value::Value>()?);
     Ok(())
 }
 
-pub fn to(state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
     let nametag = state.definitions.get_nametag(&word)?;
 
