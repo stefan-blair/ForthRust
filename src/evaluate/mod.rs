@@ -99,7 +99,7 @@ impl<'a, KERNEL: kernels::Kernel> Forth<'a, KERNEL> {
  */
 pub struct ForthState<'a> {
     pub definitions: definition::DefinitionSet,
-    pub compiled_code: compiled_instructions::CompiledInstructions<'a>,
+    pub compiled_instructions: compiled_instructions::CompiledInstructions<'a>,
     // the return stack is not actually used as a return stack, but is still provided for other uses
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
@@ -116,7 +116,7 @@ pub struct ForthState<'a> {
 impl<'a> ForthState<'a> {
     pub fn new() -> Self {
         Self {
-            compiled_code: compiled_instructions::CompiledInstructions::new(),
+            compiled_instructions: compiled_instructions::CompiledInstructions::new(),
             definitions: definition::DefinitionSet::new(),
 
             return_stack: stack::Stack::new(),
@@ -140,12 +140,12 @@ impl<'a> ForthState<'a> {
         self
     }
 
-    fn get_evaluator<'f, 't, 'i, 'o>(&'f mut self, input_stream: &'i mut tokens::TokenStream<'t>, output_stream: &'o mut dyn output_stream::OutputStream) -> ForthEvaluator<'f, 'i, 'o, 't, '_, 'a> {
+    fn get_evaluator<'f, 't, 'i, 'o>(&'f mut self, input_stream: &'i mut tokens::TokenStream<'t>, output_stream: &'o mut dyn output_stream::OutputStream) -> ForthEvaluator<'f, 'i, 'o, 't, 'a> {
         ForthEvaluator {
             input_stream: input_stream,
             output_stream: output_stream,
 
-            compiled_code: self.compiled_code.borrow(),
+            compiled_instructions: &mut self.compiled_instructions,
 
             definitions: &mut self.definitions,
 
@@ -164,9 +164,6 @@ impl<'a> ForthState<'a> {
         
         let result = evaluator.execute_current_instruction();
 
-        let buffer = evaluator.compiled_code.buffer;
-        self.compiled_code.restore(buffer);
-
         return result;
     }
 
@@ -175,11 +172,11 @@ impl<'a> ForthState<'a> {
     }
 }
 
-pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
+pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a> {
     pub input_stream: &'i mut tokens::TokenStream<'t>,
     pub output_stream: &'o mut dyn output_stream::OutputStream,
 
-    pub compiled_code: compiled_instructions::CompilingInstructions<'a, 'b>,
+    pub compiled_instructions: &'f mut compiled_instructions::CompiledInstructions<'a>,
 
     pub definitions: &'f mut definition::DefinitionSet,
 
@@ -192,12 +189,12 @@ pub struct ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
     pub current_instruction: &'f mut Option<definition::ExecutionToken>,
 }
 
-impl<'f, 'i, 'o, 't, 'a, 'b> ForthEvaluator<'f, 'i, 'o, 't, 'a, 'b> {
+impl<'f, 'i, 'o, 't, 'a> ForthEvaluator<'f, 'i, 'o, 't, 'a> {
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
         match execution_token {
             definition::ExecutionToken::Definition(address) => self.invoke_at(address),
             definition::ExecutionToken::LeafOperation(fptr) => fptr(self),
-            definition::ExecutionToken::CompiledInstruction(_) => self.compiled_code.compiled_code.get(execution_token)(self),
+            definition::ExecutionToken::CompiledInstruction(_) => self.compiled_instructions.get(execution_token).execute(self),
             definition::ExecutionToken::Number(i) => Ok(self.stack.push(i))
         }
     }

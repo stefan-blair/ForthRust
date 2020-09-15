@@ -3,14 +3,65 @@ use crate::memory;
 use crate::environment::{generic_numbers, value};
 
 
-pub struct InstructionCompiler<'a, 'b, 'c, 'd, 'e, 'f, 'g> {
-    state: &'a mut evaluate::ForthEvaluator<'b, 'c, 'd, 'e, 'f, 'g>,
+pub trait CloneCompiledInstruction<'a> {
+    fn clone_boxed(&self) -> Box<dyn CompiledInstruction<'a> + 'a>;
+}
+
+pub trait CompiledInstruction<'a>: CloneCompiledInstruction<'a> {
+    fn execute(&self, state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult;
+}
+
+impl <'a, T: 'a + Clone + CompiledInstruction<'a>> CloneCompiledInstruction<'a> for T {
+    fn clone_boxed(&self) -> Box<dyn CompiledInstruction<'a> + 'a> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone)]
+struct Push<N: value::ValueVariant>(N);
+impl<'a, N: value::ValueVariant + 'a> CompiledInstruction<'a> for Push<N> {
+    fn execute(&self, state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+        Ok(state.stack.push(self.0))        
+    }
+}
+
+#[derive(Clone)]
+struct MemPush<N: value::ValueVariant>(N);
+impl<'a, N: value::ValueVariant + 'a> CompiledInstruction<'a> for MemPush<N> {
+    fn execute(&self, state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+        Ok(state.memory.push(self.0))
+    }
+}
+
+#[derive(Clone)]
+struct Branch(memory::Address);
+impl<'a> CompiledInstruction<'a> for Branch {
+    fn execute(&self, state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+        state.jump_to(self.0)
+    }
+}
+
+#[derive(Clone)]
+struct BranchFalse(memory::Address);
+impl<'a> CompiledInstruction<'a> for BranchFalse {
+    fn execute(&self, state: &mut evaluate::ForthEvaluator) -> evaluate::ForthResult {
+        if state.stack.pop::<generic_numbers::UnsignedNumber>()? > 0 {
+            Ok(())
+        } else {
+            state.jump_to(self.0)
+        }
+    }
+}
+
+
+pub struct InstructionCompiler<'a, 'b, 'c, 'd, 'e, 'f> {
+    state: &'a mut evaluate::ForthEvaluator<'b, 'c, 'd, 'e, 'f>,
     // marks where the compiled instruction should be loaded.  if None, defaults to pushing the instruction onto the current definition
     address: Option<memory::Address>
 }
 
-impl<'a, 'b, 'c, 'd, 'e, 'f, 'g> InstructionCompiler<'a, 'b, 'c, 'd, 'e, 'f, 'g> {
-    pub fn with_state(state: &'a mut evaluate::ForthEvaluator<'b, 'c, 'd, 'e, 'f, 'g>) -> Self {
+impl<'a, 'b, 'c, 'd, 'e, 'f> InstructionCompiler<'a, 'b, 'c, 'd, 'e, 'f> {
+    pub fn with_state(state: &'a mut evaluate::ForthEvaluator<'b, 'c, 'd, 'e, 'f>) -> Self {
         Self { state, address: None }
     }
 
@@ -20,29 +71,23 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'g> InstructionCompiler<'a, 'b, 'c, 'd, 'e, 'f, 'g>
     }
 
     pub fn branch_false(&mut self, destination: memory::Address) -> ForthResult {
-        self.compile_instruction(move |state| {
-            if state.stack.pop::<generic_numbers::UnsignedNumber>()? > 0 {
-                Ok(())
-            } else {
-                state.jump_to(destination)
-            }
-        })
+        self.compile_instruction(BranchFalse(destination))
     }
     
     pub fn branch(&mut self, destination: memory::Address) -> ForthResult {
-        self.compile_instruction(move |state| state.jump_to(destination))
+        self.compile_instruction(Branch(destination))
     }
     
-    pub fn push<N: value::ValueVariant + 'g>(&mut self, value: N) -> ForthResult {
-        self.compile_instruction(move |state| Ok(state.stack.push(value)))
+    pub fn push<N: value::ValueVariant + 'f>(&mut self, value: N) -> ForthResult {
+        self.compile_instruction(Push(value))
     }
 
-    pub fn mem_push<N: value::ValueVariant + 'g>(&mut self, value: N) -> ForthResult {
-        self.compile_instruction(move |state| Ok(state.memory.push(value)))
+    pub fn mem_push<N: value::ValueVariant + 'f>(&mut self, value: N) -> ForthResult {
+        self.compile_instruction(MemPush(value))
     }
 
-    fn compile_instruction<T: Fn(&mut evaluate::ForthEvaluator) -> evaluate::ForthResult + 'g>(&mut self, instruction: T) -> ForthResult {
-        let xt = self.state.compiled_code.add_compiled_code(Box::new(instruction));
+    fn compile_instruction<T: CompiledInstruction<'f> + 'f>(&mut self, instruction: T) -> ForthResult {
+        let xt = self.state.compiled_instructions.add(Box::new(instruction));
         if let Some(address) = self.address {
             self.state.memory.write(address, xt)
         } else {

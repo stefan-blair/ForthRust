@@ -2,7 +2,7 @@
 extern crate forth;
 extern crate test;
 
-use forth::{Error, Forth, Number, output_stream, stack, kernels};
+use forth::{Forth, output_stream, kernels};
 use test::Bencher;
 
 // literal: sequential accesses and reuse accesses
