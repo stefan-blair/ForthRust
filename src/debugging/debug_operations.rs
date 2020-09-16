@@ -20,7 +20,7 @@ pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evalua
     match xt {
         evaluate::definition::ExecutionToken::Number(n) => format!("push {}", n),
         evaluate::definition::ExecutionToken::Definition(addr) => format!("{}(defined call @ {})", word, stringify_address(addr)),
-        evaluate::definition::ExecutionToken::CompiledInstruction(_) => format!("{}(call compiled operation)", word),
+        evaluate::definition::ExecutionToken::CompiledInstruction(_) => format!("[{}]", debug_target.compiled_instructions.get(xt).to_string()),
         evaluate::definition::ExecutionToken::LeafOperation(_) => format!("{}(builtin)", word),
     }
 }
@@ -117,25 +117,25 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(us
 /**
  * Debug operations.
  */
-pub(in super) fn view_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    print_stack_formatted(debug_target, debug_target.stack.debug_only_get_vec(), io)
+pub(in super) fn view_stack(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+    print_stack_formatted(debug_target, debug_target.stack.debug_only_get_vec(), debugger_state.forth.state.get_forth_io())
 }
 
-pub(in super) fn view_return_stack(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    print_stack_formatted(debug_target, debug_target.return_stack.debug_only_get_vec(), io)
+pub(in super) fn view_return_stack(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+    print_stack_formatted(debug_target, debug_target.return_stack.debug_only_get_vec(), debugger_state.forth.state.get_forth_io())
 }
 
-pub(in super) fn view_memory(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    print_memory_formatted(debug_target, None, io);
+pub(in super) fn view_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+    print_memory_formatted(debug_target, None, debugger_state.forth.state.get_forth_io());
 }
 
-pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
     let address = debugger_state.forth.state.stack.pop().unwrap();
-    let format = io.input_stream.next_word().unwrap();
-    io.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
+    let format = debugger_state.forth.state.input_stream.next_word().unwrap();
+    debugger_state.forth.state.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
 }
 
-pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, mut io: evaluate::ForthIO) {
+pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
     let instruction_pointer = debug_target.instruction_pointer.map(|addr| stringify_address(addr)).unwrap_or("(awaiting input)".to_string());
     let execution_mode = match debug_target.execution_mode {
         evaluate::ExecutionMode::Compile => "compiling",
@@ -144,46 +144,46 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     let current_instruction = debug_target.current_instruction.map(|xt| stringify_execution_token(debug_target, xt)).unwrap_or("(awaiting instruction)".to_string());
 
     if let Some(error) = &debugger_state.current_error {
-        io.output_stream.writeln("######################################################");
-        io.output_stream.writeln(&format!("ENCOUNTERED ERROR {:?}", error));
-        io.output_stream.writeln("######################################################");
-        io.output_stream.writeln("");
+        debugger_state.forth.state.output_stream.writeln("######################################################");
+        debugger_state.forth.state.output_stream.writeln(&format!("ENCOUNTERED ERROR {:?}", error));
+        debugger_state.forth.state.output_stream.writeln("######################################################");
+        debugger_state.forth.state.output_stream.writeln("");
     }
 
-    io.output_stream.writeln("------------------------------------------------------");
+    debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     if debugger_state.breakpoints.len() > 0 {
-        io.output_stream.write(&format!("\n{:>20}:", "breakpoints"));
+        debugger_state.forth.state.output_stream.write(&format!("\n{:>20}:", "breakpoints"));
         for address in debugger_state.breakpoints.iter() {
-            io.output_stream.write(&format!(" {}", stringify_address(*address)));
+            debugger_state.forth.state.output_stream.write(&format!(" {}", stringify_address(*address)));
         }
-        io.output_stream.writeln("");
-        io.output_stream.writeln("------------------------------------------------------");
+        debugger_state.forth.state.output_stream.writeln("");
+        debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     }
 
     for (word, value) in &[("execution mode", execution_mode), ("current instruction", current_instruction), ("instruction pointer", instruction_pointer)] {
-        io.output_stream.writeln(&format!("{:>20}: {}", word, value));
+        debugger_state.forth.state.output_stream.writeln(&format!("{:>20}: {}", word, value));
     }
     
-    io.output_stream.writeln("------------------------------------------------------");
+    debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     if let Some(instruction_pointer) = debug_target.instruction_pointer {
-        io.output_stream.writeln("memory:\n");
+        debugger_state.forth.state.output_stream.writeln("memory:\n");
         let start = if instruction_pointer.get_cell() < 3 {
             0
         } else {
             instruction_pointer.get_cell() - 3
         };
         let end = instruction_pointer.get_cell() + 4;
-        print_memory_formatted(debug_target, Some((start, end)), io.borrow());
-        io.output_stream.writeln("------------------------------------------------------");
+        print_memory_formatted(debug_target, Some((start, end)), debugger_state.forth.state.get_forth_io());
+        debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     }
 
     let stack_vec = debug_target.stack.debug_only_get_vec();
-    io.output_stream.writeln("stack:\n");
-    print_stack_formatted(debug_target, &stack_vec[..std::cmp::min(10, stack_vec.len())], io.borrow());
-    io.output_stream.writeln("------------------------------------------------------");
+    debugger_state.forth.state.output_stream.writeln("stack:\n");
+    print_stack_formatted(debug_target, &stack_vec[..std::cmp::min(10, stack_vec.len())], debugger_state.forth.state.get_forth_io());
+    debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
 }
 
-pub(in super) fn all_commands(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+pub(in super) fn all_commands(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
     for (word, nametag) in debug_target.definitions.debug_only_get_nametag_map().iter() {
         let definition = debug_target.definitions.get(*nametag);
         let immediate_string = if definition.immediate {
@@ -192,44 +192,44 @@ pub(in super) fn all_commands(_: &mut debugger::DebugState, debug_target: &mut e
             ""
         };
 
-        io.output_stream.writeln(&format!("{:<15}: {:<10} {}", word, immediate_string, stringify_execution_token(debug_target, definition.execution_token)))
+        debugger_state.forth.state.output_stream.writeln(&format!("{:<15}: {:<10} {}", word, immediate_string, stringify_execution_token(debug_target, definition.execution_token)))
     }
 }
 
-pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io: evaluate::ForthIO) {
+pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
     let address = debugger_state.forth.state.stack.pop().unwrap();
     debugger_state.breakpoints.push(address);
-    io.output_stream.writeln(&format!("Set breakpoint @ {}", stringify_address(address)));
+    debugger_state.forth.state.output_stream.writeln(&format!("Set breakpoint @ {}", stringify_address(address)));
 }
 
-pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    io.output_stream.writeln("Stepping...");
+pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
+    debugger_state.forth.state.output_stream.writeln("Stepping...");
     debugger_state.stepping = true;
     debugger_state.debugging = false;
     debugger_state.current_error = None;
 }
 
-pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io: evaluate::ForthIO) {
-    io.output_stream.writeln("Continuing");
+pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
+    debugger_state.forth.state.output_stream.writeln("Continuing");
     debugger_state.stepping = false;
     debugger_state.debugging = false;
     debugger_state.current_error = None;
 }
 
-pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState, io:evaluate::ForthIO) {
-    io.output_stream.writeln("Exiting...");
+pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
+    debugger_state.forth.state.output_stream.writeln("Exiting...");
     debugger_state.stepping = false;
     debugger_state.debugging = false;
     debugger_state.current_error = debugger_state.current_error.take().or(Some(evaluate::Error::Halt));
 }
 
-pub(in super) fn see(_: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io:evaluate::ForthIO) {
-    let definition = match debug_target.definitions.get_from_token(io.input_stream.next().unwrap()) {
+pub(in super) fn see(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+    let definition = match debug_target.definitions.get_from_token(debugger_state.forth.state.input_stream.next().unwrap()) {
         Ok(definition) => definition,
-        _ => return io.output_stream.writeln("No definition found")
+        _ => return debugger_state.forth.state.output_stream.writeln("No definition found")
     };
 
-    io.output_stream.writeln(&stringify_execution_token(debug_target, definition.execution_token));
+    debugger_state.forth.state.output_stream.writeln(&stringify_execution_token(debug_target, definition.execution_token));
     if let evaluate::definition::ExecutionToken::Definition(address) = definition.execution_token {
         let mut end = address;
         while {
@@ -240,11 +240,11 @@ pub(in super) fn see(_: &mut debugger::DebugState, debug_target: &mut evaluate::
         } {}
         end.increment_cell();
 
-        print_memory_formatted(debug_target, Some((address.get_cell(), end.get_cell())), io);
+        print_memory_formatted(debug_target, Some((address.get_cell(), end.get_cell())), debugger_state.forth.state.get_forth_io());
     }
 }
 
-pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState, io: evaluate::ForthIO);
+pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState);
 
 pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
     ("STACK", view_stack),

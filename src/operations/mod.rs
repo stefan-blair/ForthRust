@@ -1,7 +1,6 @@
 use crate::environment::{value, memory, generic_numbers, generic_numbers::GenericNumber, generic_numbers::SignedGenericNumber};
 use crate::evaluate::{self, ForthResult, ForthState};
 use crate::compiled_instructions::instruction_compiler;
-use crate::io::output_stream::OutputStream;
 
 pub mod control_flow_operations;
 mod arithmetic_operations;

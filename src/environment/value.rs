@@ -4,7 +4,7 @@ use super::generic_numbers;
 use crate::evaluate::{self, Error};
 
 
-pub trait ValueVariant: std::marker::Sized + Copy + Clone {
+pub trait ValueVariant: std::marker::Sized + Copy + Clone + ToString {
     // connector functions used for stack and memory operations
     fn push_to_stack(self, stack: &mut stack::Stack);
     fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error>;
@@ -56,6 +56,15 @@ impl ValueVariant for Value {
     }
 }
 
+impl ToString for Value {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Number(i) => i.to_string(),
+            Self::ExecutionToken(e) => e.to_string()
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct DoubleValue(Value, Value);
 
@@ -90,5 +99,11 @@ impl ValueVariant for DoubleValue {
 
     fn size() -> memory::Offset {
         2
+    }
+}
+
+impl ToString for DoubleValue {
+    fn to_string(&self) -> String {
+        format!("double value ({} {})", self.0.to_string(), self.1.to_string())
     }
 }

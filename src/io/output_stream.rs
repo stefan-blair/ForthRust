@@ -7,6 +7,9 @@ pub trait OutputStream {
         self.write(m);
         self.write("\n");
     }
+    fn consume(&mut self) -> String {
+        return "".to_string();
+    }
 }
 
 pub struct BufferedOutputStream {
@@ -19,15 +22,16 @@ impl BufferedOutputStream {
             stream: String::new()
         }
     }
-
-    pub fn consume(&mut self) -> String {
-        mem::take(&mut self.stream)
-    }
 }
 
 impl OutputStream for BufferedOutputStream {
     fn write(&mut self, m: &str) {
         self.stream.push_str(m);
+    }
+
+    
+    fn consume(&mut self) -> String {
+        mem::take(&mut self.stream)
     }
 }
 
@@ -41,24 +45,4 @@ impl DropOutputStream {
 
 impl OutputStream for DropOutputStream {
     fn write(&mut self, _m: &str) {}
-}
-
-pub struct OptionalOutputStream<'a, 'b>(Option<&'a mut (dyn OutputStream + 'b)>);
-
-impl<'a, 'b> OptionalOutputStream<'a, 'b> {
-    pub fn empty() -> Self {
-        Self(None)
-    }
-
-    pub fn with(output_stream: &'a mut (dyn OutputStream + 'b)) -> Self {
-        Self(Some(output_stream))
-    }
-}
-
-impl<'a, 'b> OutputStream for OptionalOutputStream<'a, 'b> {
-    fn write(&mut self, m: &str) {
-        if let Some(output_stream) = self.0.as_mut() {
-            output_stream.write(m)
-        }
-    }
 }

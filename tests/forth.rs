@@ -407,12 +407,11 @@ fn do_loop_test() {
 
 #[test]
 fn do_loop_index_test() {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new();
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(output_stream::BufferedOutputStream::new());
     assert!(f.evaluate_string(": TEST   10 0 DO I DUP LOOP ;").is_ok());
     assert_eq!(Vec::<Number>::new(), stack_to_vec(&mut f.state.stack));
     assert!(f.evaluate_string("TEST").is_ok());
-    println!("{}", output_stream.consume());
+    println!("{}", f.state.output_stream.consume());
     assert_eq!(vec![0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9], stack_to_vec(&mut f.state.stack));
 }
 
@@ -426,21 +425,19 @@ fn do_loop_leave_test() {
 
 #[test]
 fn nested_do_loop_test() {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(output_stream::BufferedOutputStream::new());
     assert!(f.evaluate_string(": MULTIPLICATIONS  CR 11 1 DO  DUP I * . LOOP  DROP ;").is_ok());
     assert!(f.evaluate_string(": TABLE  CR 11 1 DO  I MULTIPLICATIONS  LOOP ;").is_ok());
     assert!(f.evaluate_string("TABLE").is_ok());
-    assert_eq!("\n\n1 2 3 4 5 6 7 8 9 10 \n2 4 6 8 10 12 14 16 18 20 \n3 6 9 12 15 18 21 24 27 30 \n4 8 12 16 20 24 28 32 36 40 \n5 10 15 20 25 30 35 40 45 50 \n6 12 18 24 30 36 42 48 54 60 \n7 14 21 28 35 42 49 56 63 70 \n8 16 24 32 40 48 56 64 72 80 \n9 18 27 36 45 54 63 72 81 90 \n10 20 30 40 50 60 70 80 90 100 ", output_stream.consume());
+    assert_eq!("\n\n1 2 3 4 5 6 7 8 9 10 \n2 4 6 8 10 12 14 16 18 20 \n3 6 9 12 15 18 21 24 27 30 \n4 8 12 16 20 24 28 32 36 40 \n5 10 15 20 25 30 35 40 45 50 \n6 12 18 24 30 36 42 48 54 60 \n7 14 21 28 35 42 49 56 63 70 \n8 16 24 32 40 48 56 64 72 80 \n9 18 27 36 45 54 63 72 81 90 \n10 20 30 40 50 60 70 80 90 100 ", f.state.output_stream.consume());
 }
 
 #[test]
 fn pentajumps_loop_plus() {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(output_stream::BufferedOutputStream::new());
     assert!(f.evaluate_string(": PENTAJUMPS  50 0 DO  I .  5 +LOOP ;").is_ok());
     assert!(f.evaluate_string("PENTAJUMPS").is_ok());
-    assert_eq!("0 5 10 15 20 25 30 35 40 45 ", output_stream.consume());
+    assert_eq!("0 5 10 15 20 25 30 35 40 45 ", f.state.output_stream.consume());
 }
 
 #[test]
@@ -461,11 +458,10 @@ fn while_repeat_loop_test() {
 
 #[test]
 fn print_string_test() {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(output_stream::BufferedOutputStream::new());
     assert!(f.evaluate_string(": test .\" hello world this is a test \" 2 2 + . ;").is_ok());
     assert!(f.evaluate_string("test").is_ok());
-    assert_eq!(output_stream.consume(), "hello world this is a test 4 ");
+    assert_eq!(f.state.output_stream.consume(), "hello world this is a test 4 ");
 }
 
 #[test]
@@ -486,10 +482,9 @@ fn test_brackets() {
 
 #[test]
 fn print_size_test() {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(output_stream::BufferedOutputStream::new());
     assert!(f.evaluate_string("-1 -1 UM+ D.").is_ok());
-    assert_eq!("36893488147419103230 ", output_stream.consume());    
+    assert_eq!("36893488147419103230 ", f.state.output_stream.consume());    
 }
 
 #[test]
@@ -502,8 +497,7 @@ fn custom_constant_test() {
 
 #[test]
 fn materials_program_test() {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(output_stream::BufferedOutputStream::new());
     assert!(f.evaluate_string("\\ \"No Weighting\" from Starting Forth Chapter 12
     VARIABLE DENSITY
     VARIABLE THETA
@@ -534,5 +528,5 @@ fn materials_program_test() {
        \" wet sand\"         118        900  MATERIAL WET-SAND
        \" clay\"             120        727  MATERIAL CLAY").is_ok());
     assert!(f.evaluate_string("cement 10 foot pile 10 foot 3 inch pile dry-sand 10 foot pile").is_ok());
-    assert_eq!("= 138 tons of cement= 151 tons of cement= 81 tons of dry sand", output_stream.consume());
+    assert_eq!("= 138 tons of cement= 151 tons of cement= 81 tons of dry sand", f.state.output_stream.consume());
 }

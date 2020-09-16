@@ -33,58 +33,67 @@ pub enum ExecutionMode {
     Interpret,
 }
 
-pub struct ForthIO<'a, 't> {
-    pub input_stream: &'a mut tokens::TokenStream<'t>,
-    pub output_stream: &'a mut dyn output_stream::OutputStream
+pub struct ForthIO<'a, 'i, 'o> {
+    pub input_stream: &'a mut tokens::TokenStream<'i>,
+    pub output_stream: &'a mut (dyn output_stream::OutputStream + 'o)
 }
 
-impl<'a, 't> ForthIO<'a, 't> {
-    pub fn new(input_stream: &'a mut tokens::TokenStream<'t>, output_stream: &'a mut dyn output_stream::OutputStream) -> Self {
+impl<'a, 'i, 'o> ForthIO<'a, 'i, 'o> {
+    pub fn new(input_stream: &'a mut tokens::TokenStream<'i>, output_stream: &'a mut (dyn output_stream::OutputStream + 'o)) -> Self {
         Self { input_stream, output_stream }
     }
 
-    pub fn borrow<'b>(&'b mut self) -> ForthIO<'b, 't> {
+    pub fn borrow<'b>(&'b mut self) -> ForthIO<'b, 'i, 'o> {
         ForthIO { input_stream: self.input_stream, output_stream: self.output_stream }
     }
 }
 
-pub struct Forth<'a, 'i, 'ro, 'o, KERNEL: kernels::Kernel> {
-    pub state: ForthState<'a, 'i, 'ro, 'o>,
+pub struct Forth<'a, 'i, 'o, KERNEL: kernels::Kernel> {
+    pub state: ForthState<'a, 'i, 'o>,
     pub kernel: KERNEL
 }
 
-impl<'a, 'i, 'ro, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'ro, 'o, KERNEL> {
+impl<'a, 'i, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'o, KERNEL> {
     pub fn new() -> Self {
         let mut state = ForthState::new();
         let kernel = KERNEL::new(&mut state);
         let mut forth_machine = Self { state, kernel };
 
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
-            forth_machine.evaluate(tokens::TokenStream::new(definition.chars())).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
+            forth_machine.evaluate_string(definition).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
         }
 
         forth_machine
     }
 
-    pub fn set_output_stream<O: output_stream::OutputStream + 'o> (&mut self, output: &'ro mut O) {
-        self.state.output_stream = output_stream::OptionalOutputStream::with(output);
+    pub fn set_output_stream<O: output_stream::OutputStream + 'o> (&mut self, output: O) {
+        self.state.output_stream = Box::new(output)
     }
 
-    pub fn with_output_stream<O: output_stream::OutputStream + 'o> (mut self, output: &'ro mut O) -> Self {
-        self.state.output_stream = output_stream::OptionalOutputStream::with(output);
+    pub fn with_output_stream<O: output_stream::OutputStream + 'o> (mut self, output: O) -> Self {
+        self.state.output_stream = Box::new(output);
         self
     }
 
-    pub fn evaluate_string(&mut self, input: &'i str) -> ForthResult {
-        self.evaluate_stream(input.chars())
+    pub fn set_input_string(&mut self, input: &'i str) {
+        self.set_input_stream(input.chars())
     }
 
-    pub fn evaluate_stream<I: Iterator<Item = char> + 'i>(&mut self, stream: I) -> ForthResult {
-        self.evaluate(tokens::TokenStream::new(stream))
+    pub fn with_input_string(mut self, input: &'i str) -> Self {
+        self.set_input_string(input);
+        self
     }
 
-    pub fn evaluate(&mut self, input_stream: tokens::TokenStream<'i>) -> ForthResult {    
-        self.state.input_stream = input_stream;
+    pub fn with_input_stream<I: Iterator<Item = char> + 'i>(mut self, stream: I) -> Self {
+        self.set_input_stream(stream);
+        self
+    }
+
+    pub fn set_input_stream<I: Iterator<Item = char> + 'i>(&mut self, stream: I) {
+        self.state.input_stream = tokens::TokenStream::new(stream);
+    }
+
+    pub fn evaluate(&mut self) -> ForthResult {    
         loop {
             match self.kernel.evaluate_chain(&mut self.state)
                     .and_then(|_| self.state.execute_current_instruction())
@@ -98,12 +107,22 @@ impl<'a, 'i, 'ro, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'ro, 'o, KERNEL> {
         }
         Ok(())
     }
+
+    pub fn evaluate_string(&mut self, input: &'i str) -> ForthResult {
+        self.set_input_string(input);
+        self.evaluate()
+    }
+
+    pub fn evaluate_stream<I: Iterator<Item = char> + 'i>(&mut self, stream: I) -> ForthResult {
+        self.set_input_stream(stream);
+        self.evaluate()
+    }
 }
 
 /**
  * This struct contains the state required to execute / emulate the code
  */
-pub struct ForthState<'a, 'i, 'ro, 'o> {
+pub struct ForthState<'a, 'i, 'o> {
     pub definitions: definition::DefinitionSet,
     pub compiled_instructions: compiled_instructions::CompiledInstructions<'a>,
     // the return stack is not actually used as a return stack, but is still provided for other uses
@@ -117,12 +136,12 @@ pub struct ForthState<'a, 'i, 'ro, 'o> {
     // contains the current instruction, if any, being executed
     pub current_instruction: Option<definition::ExecutionToken>,
 
-    pub output_stream: output_stream::OptionalOutputStream<'ro, 'o>,
+    pub output_stream: Box<dyn output_stream::OutputStream + 'o>,
     pub input_stream: tokens::TokenStream<'i>
 }
 
 // split it up into some sort of ForthState vs. ForthMachine, so ForthMachine -> ForthState -> ForthEvaluator ...
-impl<'a, 'i, 'ro, 'o> ForthState<'a, 'i, 'ro, 'o> {
+impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn new() -> Self {
         Self {
             compiled_instructions: compiled_instructions::CompiledInstructions::new(),
@@ -136,9 +155,13 @@ impl<'a, 'i, 'ro, 'o> ForthState<'a, 'i, 'ro, 'o> {
             instruction_pointer: None,
             current_instruction: None,
 
-            output_stream: output_stream::OptionalOutputStream::empty(),
+            output_stream: Box::new(output_stream::DropOutputStream::new()),
             input_stream: tokens::TokenStream::empty(),
         }.with_operations(operations::get_operations())
+    }
+
+    pub fn get_forth_io<'b>(&'b mut self) -> ForthIO<'b, 'i, 'o> {
+        ForthIO::new(&mut self.input_stream, self.output_stream.as_mut())
     }
 
     pub fn add_operations(&mut self, operations: operations::OperationTable) {
@@ -154,14 +177,14 @@ impl<'a, 'i, 'ro, 'o> ForthState<'a, 'i, 'ro, 'o> {
 
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
         match execution_token {
-            definition::ExecutionToken::Definition(address) => self.invoke_at(address),
+            definition::ExecutionToken::Definition(address) => self.call(address),
             definition::ExecutionToken::LeafOperation(fptr) => fptr(self),
             definition::ExecutionToken::CompiledInstruction(_) => self.compiled_instructions.get(execution_token).execute(self),
             definition::ExecutionToken::Number(i) => Ok(self.stack.push(i))
         }
     }
 
-    fn invoke_at(&mut self, address: memory::Address) -> ForthResult {
+    pub fn call(&mut self, address: memory::Address) -> ForthResult {
         self.instruction_pointer.replace(address).map(|addr| {
             self.return_stack.push(addr.to_number());
         });

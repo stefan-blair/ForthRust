@@ -18,21 +18,6 @@ pub fn pop_write(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     Ok(())
 }
 
-pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let word = state.input_stream.next_word()?;
-    let nametag = state.definitions.get_nametag(&word)?;
-
-    instruction_compiler::InstructionCompiler::with_state(state).push(nametag.to_number())?;
-    state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
-        let nametag = evaluate::definition::NameTag::from(state.stack.pop()?);
-        let number = state.stack.pop::<generic_numbers::Number>()?;
-        state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
-        Ok(())
-    }));
-
-    Ok(())
-}
-
 macro_rules! generic_operations {
     ($pre:tt, $type:ty) => {
         vec![
@@ -44,7 +29,6 @@ macro_rules! generic_operations {
 
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     let mut operations: Vec<(&'static str, bool, super::Operation)> = vec![
-        ("TO", true, to),
         (",", false, pop_write),
     ];
 

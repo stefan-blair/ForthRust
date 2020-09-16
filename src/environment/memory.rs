@@ -101,6 +101,12 @@ impl ValueVariant for Address {
     }
 }
 
+impl ToString for Address {
+    fn to_string(&self) -> String {
+        format!("Address({:#x})", self.0)
+    }
+}
+
 pub struct Memory(Vec<value::Value>);
 
 impl Memory {

@@ -2,15 +2,13 @@
 extern crate forth;
 extern crate test;
 
-use forth::{Forth, output_stream, kernels};
+use forth::{Forth, kernels};
 use test::Bencher;
 
 // literal: sequential accesses and reuse accesses
 #[bench]
 fn embedded_literal_sequential_test(b: &mut Bencher) {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
     let mut f = Forth::<kernels::DefaultKernel>::new();
-    f.set_output_stream(&mut output_stream);
     b.iter(move || {
         // create literals
         for i in 0..800 {
@@ -27,9 +25,7 @@ fn embedded_literal_sequential_test(b: &mut Bencher) {
 
 #[bench]
 fn embedded_literal_reuse_test(b: &mut Bencher) {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
     let mut f = Forth::<kernels::DefaultKernel>::new();
-    f.set_output_stream(&mut output_stream);
     b.iter(move || {
         // create literals
         for i in 0..800 {
@@ -46,8 +42,7 @@ fn embedded_literal_reuse_test(b: &mut Bencher) {
 
 #[bench]
 fn compiled_literal_sequential_test(b: &mut Bencher) {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new();
     b.iter(move || {
         // create literals
         for i in 0..800 {
@@ -64,8 +59,7 @@ fn compiled_literal_sequential_test(b: &mut Bencher) {
 
 #[bench]
 fn compiled_literal_reuse_test(b: &mut Bencher) {
-    let mut output_stream = output_stream::BufferedOutputStream::new();
-    let mut f = Forth::<kernels::DefaultKernel>::new().with_output_stream(&mut output_stream);
+    let mut f = Forth::<kernels::DefaultKernel>::new();
     b.iter(move || {
         // create literals
         for i in 0..800 {

@@ -78,8 +78,7 @@ impl output_stream::OutputStream for StdoutStream {
 }
 
 fn main() {
-    let mut output_stream = StdoutStream::new();
-    let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new().with_output_stream(&mut output_stream);
+    let mut forth = Forth::<debugger::DebugKernel<kernels::DefaultKernel>>::new().with_output_stream(StdoutStream::new());
     forth.kernel.init_io(StdinStream::new(), StdoutStream::new());
  
     let file_path = std::env::args().nth(1).expect("Please provide an input path");

@@ -2,6 +2,7 @@
 implementation:
 
     REFACTOR KERNELS
+    input / output streams may be a bit too constrained lifetime-wise though.  introducing a ForthEvaluator that has the state AND io stuff, or having io be a second argument to stuff, would maybe be a good idea.
 
     compiled code can store arguments / parameters embedded right there
     add in half words (4 bytes instead of 8)

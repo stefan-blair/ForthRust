@@ -30,6 +30,17 @@ impl ExecutionToken {
     }
 }
 
+impl ToString for ExecutionToken {
+    fn to_string(&self) -> String {
+        match *self {
+            Self::LeafOperation(operation) => format!("operation @ {}", (operation as usize)),
+            Self::CompiledInstruction(offset) => format!("compiled instruction @ offset {}", offset),
+            Self::Definition(address) => format!("definition @ {:#x}", address.to_number()),
+            Self::Number(number) => format!("push {}", number)
+        }
+    }
+}
+
 impl Hash for ExecutionToken {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let index = match self {

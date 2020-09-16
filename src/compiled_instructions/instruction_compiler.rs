@@ -7,7 +7,7 @@ pub trait CloneCompiledInstruction<'a> {
     fn clone_boxed(&self) -> Box<dyn CompiledInstruction<'a> + 'a>;
 }
 
-pub trait CompiledInstruction<'a>: CloneCompiledInstruction<'a> {
+pub trait CompiledInstruction<'a>: CloneCompiledInstruction<'a> + ToString {
     fn execute(&self, state: &mut evaluate::ForthState) -> evaluate::ForthResult;
 }
 
@@ -24,6 +24,11 @@ impl<'a, N: value::ValueVariant + 'a> CompiledInstruction<'a> for Push<N> {
         Ok(state.stack.push(self.0))        
     }
 }
+impl<N: value::ValueVariant> ToString for Push<N> {
+    fn to_string(&self) -> String {
+        format!("push {}", self.0.to_string())
+    }
+}
 
 #[derive(Clone)]
 struct MemPush<N: value::ValueVariant>(N);
@@ -32,12 +37,22 @@ impl<'a, N: value::ValueVariant + 'a> CompiledInstruction<'a> for MemPush<N> {
         Ok(state.memory.push(self.0))
     }
 }
+impl<N: value::ValueVariant> ToString for MemPush<N> {
+    fn to_string(&self) -> String {
+        format!("[alloc + push mem] {}", self.0.to_string())
+    }
+}
 
 #[derive(Clone)]
 struct Branch(memory::Address);
 impl<'a> CompiledInstruction<'a> for Branch {
     fn execute(&self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
         state.jump_to(self.0)
+    }
+}
+impl ToString for Branch {
+    fn to_string(&self) -> String {
+        format!("jmp {}", self.0.to_string())
     }
 }
 
@@ -52,16 +67,21 @@ impl<'a> CompiledInstruction<'a> for BranchFalse {
         }
     }
 }
+impl ToString for BranchFalse {
+    fn to_string(&self) -> String {
+        format!("jz {}", self.0.to_string())
+    }
+}
 
 
-pub struct InstructionCompiler<'a, 'b, 'c, 'd, 'e> {
-    state: &'a mut evaluate::ForthState<'b, 'c, 'd, 'e>,
+pub struct InstructionCompiler<'a, 'b, 'c, 'd> {
+    state: &'a mut evaluate::ForthState<'b, 'c, 'd>,
     // marks where the compiled instruction should be loaded.  if None, defaults to pushing the instruction onto the current definition
     address: Option<memory::Address>
 }
 
-impl<'a, 'b, 'c, 'd, 'e> InstructionCompiler<'a, 'b, 'c, 'd, 'e> {
-    pub fn with_state(state: &'a mut evaluate::ForthState<'b, 'c, 'd, 'e>) -> Self {
+impl<'a, 'b, 'c, 'd> InstructionCompiler<'a, 'b, 'c, 'd> {
+    pub fn with_state(state: &'a mut evaluate::ForthState<'b, 'c, 'd>) -> Self {
         Self { state, address: None }
     }
 

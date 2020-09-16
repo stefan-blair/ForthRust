@@ -68,6 +68,21 @@ pub fn value(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     Ok(())
 }
 
+pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let word = state.input_stream.next_word()?;
+    let nametag = state.definitions.get_nametag(&word)?;
+
+    instruction_compiler::InstructionCompiler::with_state(state).push(nametag.to_number())?;
+    state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+        let nametag = evaluate::definition::NameTag::from(state.stack.pop()?);
+        let number = state.stack.pop::<generic_numbers::Number>()?;
+        state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
+        Ok(())
+    }));
+
+    Ok(())
+}
+
 pub fn cells(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let number = state.stack.pop::<generic_numbers::UnsignedNumber>()? as memory::Offset;
     state.stack.push((number * memory::CELL_SIZE) as generic_numbers::UnsignedNumber);
@@ -82,6 +97,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("DOES>", false, does),
         ("VALUE", false, value),
         ("CELLS", false, cells),
+        ("TO", true, to),
 
         ("VARIABLE" , false, variable::<value::Value>),
         ("CONSTANT", false, constant::<value::Value>),
