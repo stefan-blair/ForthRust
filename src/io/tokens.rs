@@ -44,6 +44,11 @@ impl<'a> TokenStream<'a> {
         self.stream.next().ok_or(Error::NoMoreTokens)
     }
 
+    pub fn prepend_stream<I: Iterator<Item = char> + 'a>(&mut self, new_stream: I) {
+        let current_stream = std::mem::replace(&mut self.stream, Box::new(std::iter::empty()));
+        self.stream = Box::new(new_stream.chain(current_stream))
+    }
+
     // todo: implement some sort of next_char function
 }
 

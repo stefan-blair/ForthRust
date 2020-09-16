@@ -111,6 +111,21 @@ pub fn throw(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     Err(evaluate::Error::Exception(error_code))
 }
 
+pub fn evaluate_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let length: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let address: memory::Address = state.stack.pop()?;
+
+    // read the characters into a vector
+    let mut copied_string = Vec::new();
+    for i in 0..length {
+        copied_string.push(state.memory.read::<generic_numbers::UnsignedByte>(address.plus(i as memory::Offset))? as char);
+    }
+    // convert that vector into an into_iter, which takes ownership of it, and prepend it to the current input stream
+    state.input_stream.prepend_stream(copied_string.into_iter());
+
+    Ok(())
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         ("BREAK", false, control_flow_break),
@@ -123,6 +138,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("WHILE", true, while_loop),
         ("REPEAT", true, repeat_loop),
         ("LEAVE", false, leave),
-        ("THROW", false, throw),    
+        ("THROW", false, throw),
+        ("EVALUATE", false, evaluate_string),
     ]
 }
