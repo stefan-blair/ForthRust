@@ -1,13 +1,9 @@
 
 implementation:
 
-    REFACTOR KERNELS
-    input / output streams may be a bit too constrained lifetime-wise though.  introducing a ForthEvaluator that has the state AND io stuff, or having io be a second argument to stuff, would maybe be a good idea.
+    memory -> heap, make addresses / reading / writing happen in ForthState
 
-    compiled code can store arguments / parameters embedded right there
     add in half words (4 bytes instead of 8)
-    maybe we can fully remove the notion of "CompiledCode" (as a boxed closure), and then merge all three of the forth state structs into one Forth struct
-
     make length-string and instruction into ValueVarients.  instruction would be a bit tricky though, would have to waste a cell with arguments count
 
     track lengths of functions in cells

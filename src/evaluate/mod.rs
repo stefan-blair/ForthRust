@@ -20,6 +20,7 @@ pub enum Error {
     InvalidExecutionToken,
     AddressOutOfRange,
     NoMoreTokens,
+    Exception(u64),
     
     // this isn't a bad error, just a result that the input stream has finished cleanly
     TokenStreamEmpty,
