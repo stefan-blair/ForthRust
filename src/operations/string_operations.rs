@@ -42,7 +42,7 @@ pub fn trailing(state: &mut ForthState) -> ForthResult {
 
     let mut new_count = 0;
     for i in 0..count {
-        let current_char = state.read::<generic_numbers::UnsignedByte>(address.plus(i as memory::Offset))? as char;
+        let current_char = state.read::<generic_numbers::UnsignedByte>(address.plus(i as usize))? as char;
         if current_char.is_ascii() && !current_char.is_whitespace() {
             new_count = i + 1;
         }
@@ -60,8 +60,8 @@ pub fn cmove(state: &mut ForthState) -> ForthResult {
     let source: memory::Address = state.stack.pop()?;
 
     for i in 0..count {
-        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?;
-        state.write(destination.plus(i as memory::Offset), current_byte)?;
+        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as usize))?;
+        state.write(destination.plus(i as usize), current_byte)?;
     }
 
     Ok(())
@@ -73,8 +73,8 @@ pub fn cmove_backwards(state: &mut ForthState) -> ForthResult {
     let source: memory::Address = state.stack.pop()?;
 
     for i in (count - 1)..0 {
-        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?;
-        state.write(destination.plus(i as memory::Offset), current_byte)?;
+        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as usize))?;
+        state.write(destination.plus(i as usize), current_byte)?;
     }
 
     Ok(())
@@ -87,11 +87,11 @@ pub fn move_noclobber(state: &mut ForthState) -> ForthResult {
     
     let mut bytes = Vec::new();
     for i in 0..count {
-        bytes.push(state.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?);
+        bytes.push(state.read::<generic_numbers::UnsignedByte>(source.plus(i as usize))?);
     }
 
     for (i, byte) in bytes.into_iter().enumerate() {
-        state.write(destination.plus(i as memory::Offset), byte)?;
+        state.write(destination.plus(i as usize), byte)?;
     }
 
     Ok(())
@@ -109,7 +109,7 @@ pub fn accept(state: &mut ForthState) -> ForthResult {
             break;
         }
 
-        state.write(address.plus(copied_characters as memory::Offset), current_char as generic_numbers::UnsignedByte)?;
+        state.write(address.plus(copied_characters as usize), current_char as generic_numbers::UnsignedByte)?;
         copied_characters += 1;
     }
 

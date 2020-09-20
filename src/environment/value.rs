@@ -12,7 +12,7 @@ pub trait ValueVariant: std::marker::Sized + Copy + Clone + ToString {
     fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error>;
     fn push_to_memory(self, memory: &mut memory::Memory);
     // the size, in number of cells (aka, the size of one Value)
-    fn size() -> memory::Offset;
+    fn size() -> usize;
 }
 
 #[derive(Copy, Clone)]
@@ -51,7 +51,7 @@ impl ValueVariant for Value {
         memory.push_value(self)
     }
 
-    fn size() -> memory::Offset {
+    fn size() -> usize {
         1
     }
 }
@@ -97,7 +97,7 @@ impl ValueVariant for DoubleValue {
         memory.push(self.1);
     }
 
-    fn size() -> memory::Offset {
+    fn size() -> usize {
         2
     }
 }

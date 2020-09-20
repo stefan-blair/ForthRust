@@ -38,7 +38,7 @@ pub fn type_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let address: memory::Address = state.stack.pop()?;
 
     for i in 0..count {
-        let c: generic_numbers::UnsignedByte = state.read(address.plus(i as memory::Offset))?;
+        let c: generic_numbers::UnsignedByte = state.read(address.plus(i as usize))?;
         state.output_stream.write(&format!("{}", c as char));
     }
 

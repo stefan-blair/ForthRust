@@ -10,18 +10,18 @@ use super::Error;
 #[derive(Clone, Copy)]
 pub enum ExecutionToken {
     LeafOperation(operations::Operation),
-    CompiledInstruction(memory::Offset),
+    CompiledInstruction(usize),
     Definition(memory::Address),
     Number(generic_numbers::Number),
 }
 
 impl ExecutionToken {
-    pub fn to_offset(self) -> memory::Offset {
+    pub fn to_offset(self) -> usize {
         match self {
-            Self::LeafOperation(fptr) => fptr as memory::Offset,
+            Self::LeafOperation(fptr) => fptr as usize,
             Self::CompiledInstruction(i) => i,
             Self::Definition(address) => address.as_raw(),
-            Self::Number(i) => i as memory::Offset
+            Self::Number(i) => i as usize
         }
     }
 
@@ -95,20 +95,20 @@ impl value::ValueVariant for ExecutionToken {
         memory.push_value(self.value())
     }
 
-    fn size() -> memory::Offset {
+    fn size() -> usize {
         1
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct NameTag(memory::Offset);
+pub struct NameTag(usize);
 
 impl NameTag {
     pub fn from(index: generic_numbers::Number) -> Self {
-        Self(index as memory::Offset)
+        Self(index as usize)
     }
 
-    pub fn to_offset(self) -> memory::Offset {
+    pub fn to_offset(self) -> usize {
         self.0
     }
 

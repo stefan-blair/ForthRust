@@ -93,7 +93,7 @@ macro_rules! generic_number {
                 memory.push_number_by_type(self)
             }
 
-            fn size() -> memory::Offset {
+            fn size() -> usize {
                 $cells
             }
         }
@@ -139,7 +139,7 @@ macro_rules! generic_number {
                 memory.push_number_by_type(self as $name)
             }
 
-            fn size() -> memory::Offset {
+            fn size() -> usize {
                 $cells
             }
         }

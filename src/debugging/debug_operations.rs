@@ -1,5 +1,5 @@
 use crate::evaluate;
-use crate::environment;
+use crate::environment::{memory, generic_numbers, value};
 use super::debugger;
 use crate::operations;
 
@@ -7,7 +7,7 @@ use crate::operations;
 /**
  * Helper functions
  */
-fn stringify_address(addr: environment::memory::Address) -> String {
+fn stringify_address(addr: memory::Address) -> String {
     format!("{:#x}", addr.as_raw())
 }
 
@@ -25,21 +25,21 @@ pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evalua
     }
 }
 
-fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
-    let length: environment::generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
+fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: memory::Address) -> String {
+    let length: generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
     let mut buffer = String::new();
     for _ in 0..length {
         address.increment();
-        buffer.push(debug_target.read::<environment::generic_numbers::UnsignedByte>(address).unwrap() as char);
+        buffer.push(debug_target.read::<generic_numbers::UnsignedByte>(address).unwrap() as char);
     }
 
     buffer
 }
 
-fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
+fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: memory::Address) -> String {
     let mut buffer = String::new();
     loop {
-        let byte: environment::generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
+        let byte: generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
         if byte == 0 {
             return buffer;
         } else {
@@ -50,46 +50,48 @@ fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address:
     }
 }
 
-fn read_from_address(debug_target: &evaluate::ForthState, address: environment::memory::Address, format: &str) -> String {    
+fn read_from_address(debug_target: &evaluate::ForthState, address: memory::Address, format: &str) -> String {    
     match format {
         "I" => stringify_execution_token(&debug_target, debug_target.read(address).unwrap()),
         "A" => format!("--> {}", read_from_address(debug_target, debug_target.read(address).unwrap(), format)),
-        "N" => format!("{}", debug_target.read::<environment::generic_numbers::Number>(address).unwrap()),
-        "D" => format!("{}", debug_target.read::<environment::generic_numbers::DoubleNumber>(address).unwrap()),
-        "B" => format!("{}", debug_target.read::<environment::generic_numbers::Byte>(address).unwrap()),
-        "UN" => format!("{}", debug_target.read::<environment::generic_numbers::UnsignedNumber>(address).unwrap()),
-        "UD" => format!("{}", debug_target.read::<environment::generic_numbers::UnsignedDoubleNumber>(address).unwrap()),
-        "UB" => format!("{}", debug_target.read::<environment::generic_numbers::UnsignedByte>(address).unwrap()),
+        "N" => format!("{}", debug_target.read::<generic_numbers::Number>(address).unwrap()),
+        "D" => format!("{}", debug_target.read::<generic_numbers::DoubleNumber>(address).unwrap()),
+        "B" => format!("{}", debug_target.read::<generic_numbers::Byte>(address).unwrap()),
+        "UN" => format!("{}", debug_target.read::<generic_numbers::UnsignedNumber>(address).unwrap()),
+        "UD" => format!("{}", debug_target.read::<generic_numbers::UnsignedDoubleNumber>(address).unwrap()),
+        "UB" => format!("{}", debug_target.read::<generic_numbers::UnsignedByte>(address).unwrap()),
         "LS" => read_length_string_at(debug_target, address),
         "S" => read_null_terminated_string(debug_target, address),
         _ => "Unknown format specifier".to_string()
     }
 }
 
-fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[environment::value::Value], io: evaluate::ForthIO) {
+fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[value::Value], io: evaluate::ForthIO) {
     for (i, value) in values.iter().enumerate() {
         match value {
-            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:#10x} | {}", i, number)),
-            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:#10x} | {}", i, stringify_execution_token(&debug_target, *xt)))
+            value::Value::Number(number) => io.output_stream.writeln(&format!("{:#10x} | {}", i, number)),
+            value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:#10x} | {}", i, stringify_execution_token(&debug_target, *xt)))
         }
     }
 }
 
-fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String, environment::memory::Address)> {
+fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String, memory::Address)> {
     debug_target.definitions.debug_only_get_nametag_map().iter()
         .map(|(word, nametag)| (word, debug_target.definitions.get(*nametag).execution_token))
         .filter_map(|(word, execution_token)| match execution_token { 
-            evaluate::definition::ExecutionToken::Number(addr) => Some((word, environment::memory::Address::debug_only_from_offset(addr as environment::memory::Offset))),
+            evaluate::definition::ExecutionToken::Number(addr) => Some((word, memory::Address::debug_only_from_offset(addr as usize))),
             _ => None
         }).collect::<Vec<_>>()
 }
 
-fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(usize, usize)>, io: evaluate::ForthIO) {
-    let memory = debug_target.heap.debug_only_get_vec();
+fn print_memory_formatted(debug_target: &evaluate::ForthState, address: memory::Address, optional_max: Option<memory::Address>, io: evaluate::ForthIO) {
     let variables = get_variables(debug_target);
-    let (start, end) = range.unwrap_or((0, memory.len()));
-    for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
-        let current_address = environment::memory::Address::debug_only_from_cell(i as environment::memory::Offset);
+    let mut current_address = address;
+    while let Ok(value) = debug_target.read(current_address) {
+        if optional_max.map(|max| !current_address.less_than(max)).unwrap_or(false) {
+            break
+        }
+
         let word = match debug_target.definitions.debug_only_get_name(evaluate::definition::ExecutionToken::Definition(current_address)) {
             Some(word) => format!("definition of {}", word),
             None => match variables.iter().filter_map(|(word, addr)| if *addr == current_address {
@@ -108,25 +110,32 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(us
         };
 
         match value {
-            environment::value::Value::Number(number) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, number, word)),
-            environment::value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, stringify_execution_token(&debug_target, *xt), word))
-        }
+            value::Value::Number(number) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, number, word)),
+            value::Value::ExecutionToken(xt) => io.output_stream.writeln(&format!("{:<7} | {} {:<30} {}", stringify_address(current_address), is_instruction_pointer, stringify_execution_token(&debug_target, xt), word))
+        }       
+
+        current_address.increment_cell();
     }
 }
 
 /**
  * Debug operations.
  */
-pub(in super) fn view_stack(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    print_stack_formatted(debug_target, debug_target.stack.debug_only_get_vec(), debugger_state.forth.state.get_forth_io())
+pub(in super) fn view_memory_region(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+    println!("viewing memory region");
+    let label = debugger_state.forth.state.input_stream.next_word().unwrap();
+    for mapping in debug_target.get_memory_map().get_entries().iter() {
+        if label == mapping.label.to_uppercase() {
+            return print_memory_formatted(debug_target, mapping.base, None, debugger_state.forth.state.get_forth_io());
+        }
+    }
 }
 
-pub(in super) fn view_return_stack(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    print_stack_formatted(debug_target, debug_target.return_stack.debug_only_get_vec(), debugger_state.forth.state.get_forth_io())
-}
-
-pub(in super) fn view_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    print_memory_formatted(debug_target, None, debugger_state.forth.state.get_forth_io());
+pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+    debugger_state.forth.state.output_stream.writeln("memory mapping:");
+    for mapping in debug_target.get_memory_map().get_entries().iter() {
+        debugger_state.forth.state.output_stream.writeln(&format!("{}   {}  | {}", stringify_address(mapping.base), mapping.permissions.to_string(), mapping.label));
+    }
 }
 
 pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
@@ -167,13 +176,12 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     if let Some(instruction_pointer) = debug_target.instruction_pointer {
         debugger_state.forth.state.output_stream.writeln("memory:\n");
-        let start = if instruction_pointer.get_cell() < 3 {
-            0
+        let start = if debug_target.read::<value::Value>(instruction_pointer.minus_cell(3)).is_ok() {
+            instruction_pointer.minus_cell(3)
         } else {
-            instruction_pointer.get_cell() - 3
+            instruction_pointer
         };
-        let end = instruction_pointer.get_cell() + 4;
-        print_memory_formatted(debug_target, Some((start, end)), debugger_state.forth.state.get_forth_io());
+        print_memory_formatted(debug_target, start, Some(instruction_pointer.plus_cell(4)), debugger_state.forth.state.get_forth_io());
         debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     }
 
@@ -240,16 +248,15 @@ pub(in super) fn see(debugger_state: &mut debugger::DebugState, debug_target: &m
         } {}
         end.increment_cell();
 
-        print_memory_formatted(debug_target, Some((address.get_cell(), end.get_cell())), debugger_state.forth.state.get_forth_io());
+        print_memory_formatted(debug_target, address, Some(end), debugger_state.forth.state.get_forth_io());
     }
 }
 
 pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState);
 
 pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
-    ("STACK", view_stack),
-    ("RETURNSTACK", view_return_stack),
-    ("MEMORY", view_memory),
+    ("XVIEW", view_memory_region),
+    ("VMMAP", view_memory_map),
     ("X", examine_memory),
     ("STATE", view_state),
     ("ALL_COMMANDS", all_commands),

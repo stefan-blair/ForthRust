@@ -57,6 +57,10 @@ impl MemorySegment for Stack {
         self.base
     }
 
+    fn get_end(&self) -> Address {
+        self.base.plus_cell(self.stack.len())
+    }
+
     fn check_address(&self, address: Address) -> Result<(), Error> {
         if address.between(self.base, self.base.plus_cell(self.stack.len())) {
             Ok(())

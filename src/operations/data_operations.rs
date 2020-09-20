@@ -7,9 +7,9 @@ use evaluate::definition;
 pub fn here(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.stack.push(state.heap.top().to_number()); Ok(()) }
 
 pub fn allot(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
-    let total_memory = state.stack.pop::<generic_numbers::UnsignedNumber>()? as memory::Offset;
+    let total_memory = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
     let cells = (total_memory + memory::CELL_SIZE - 1) / memory::CELL_SIZE;
-    state.heap.expand(cells as memory::Offset); 
+    state.heap.expand(cells as usize); 
     Ok(()) 
 }
 
@@ -84,7 +84,7 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 }
 
 pub fn cells(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let number = state.stack.pop::<generic_numbers::UnsignedNumber>()? as memory::Offset;
+    let number = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
     state.stack.push((number * memory::CELL_SIZE) as generic_numbers::UnsignedNumber);
     Ok(())
 }

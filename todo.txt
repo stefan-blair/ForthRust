@@ -3,15 +3,9 @@ implementation:
 
     memory -> heap, make addresses / reading / writing happen in ForthState
         add multiple memory segments, heap thing, string storage
-
-    remove the memory::Offset bs, just use usize
-
-    add in half words (4 bytes instead of 8)
-    make length-string and instruction into ValueVarients.  instruction would be a bit tricky though, would have to waste a cell with arguments count
-
+    
     track lengths of functions in cells
     traits can have const values.  can use this to hardcode settings in a forth machine, for example, the ideal inline length
-
 
 debugger: 
     
@@ -27,8 +21,3 @@ noteable abscent words:
     EVALUATE: literally evaluate a string on the stack
     COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just pusts the execution token.  but if its something like `+`, it literally compiles the code into it
     STATE:    returns address of state, which contains a 1 if in compilation state, and 0 if in interpret state
-
-optimization ideas:
-
-    tail-call optimization
-    add a type of ExecutionToken for jumps instead of calls.  useful tail call optimization

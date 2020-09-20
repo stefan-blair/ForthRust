@@ -131,7 +131,9 @@ pub struct ForthState<'a, 'i, 'o> {
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
     pub heap: memory::Memory,
-    pub memory_map: memory::MemoryMap,
+    memory_map: memory::MemoryMap,
+    // different fields of the state can be accessed by the running program as memory
+    internal_state_memory: InternalStateMemory,
 
     pub execution_mode: ExecutionMode,
     // pointer to the next instruction to execute
@@ -150,17 +152,20 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         let stack = stack::Stack::new(0x7aceddead000);
         let return_stack = stack::Stack::new(0x56cadeace000);
 
+        let internal_state_memory = InternalStateMemory::new(0x5deadbeef000);
+
         let memory_map = memory::MemoryMap::new(vec![
-            memory::MemoryMapping::new(heap.get_base(), memory::MemoryPermissions::all(), |state| &state.heap, |state| &mut state.heap),
-            memory::MemoryMapping::new(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack),
-            memory::MemoryMapping::new(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack)
+            memory::MemoryMapping::new(heap.get_base(), memory::MemoryPermissions::all(), |state| &state.heap, |state| &mut state.heap, "heap"),
+            memory::MemoryMapping::new(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack, "stack"),
+            memory::MemoryMapping::new(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack, "return stack"),
+            memory::MemoryMapping::new(internal_state_memory.get_base(), memory::MemoryPermissions::readonly(), |state| state, |state| state, ""),
         ]);
 
         Self {
             compiled_instructions: compiled_instructions::CompiledInstructions::new(),
             definitions: definition::DefinitionSet::new(),
 
-            heap, stack, return_stack, memory_map,
+            heap, stack, return_stack, memory_map, internal_state_memory,
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
@@ -173,6 +178,10 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
     pub fn get_forth_io<'b>(&'b mut self) -> ForthIO<'b, 'i, 'o> {
         ForthIO::new(&mut self.input_stream, self.output_stream.as_mut())
+    }
+
+    pub fn get_memory_map(&self) -> memory::MemoryMap {
+        self.memory_map.clone()
     }
 
     pub fn add_operations(&mut self, operations: operations::OperationTable) {
@@ -189,11 +198,8 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn write<T: value::ValueVariant>(&mut self, address: memory::Address, value: T) -> Result<(), Error> {
         let entry = self.memory_map.get(address)?;
         if entry.permissions.write {
-            match entry.mapping_type {
-                memory::MemoryMappingType::Empty => Err(Error::InsufficientPermissions),
-                memory::MemoryMappingType::Normal(f, _) => value.write_to_memory(f(self), address),
-                memory::MemoryMappingType::Special(_) => panic!()
-            }
+            let mutable_getter = entry.mutable_getter;
+            value.write_to_memory(mutable_getter(self), address)
         } else {
             Err(Error::InsufficientPermissions)
         }
@@ -202,11 +208,8 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn read<T: value::ValueVariant>(&self, address: memory::Address) -> Result<T, Error> {
         let entry = self.memory_map.get(address)?;
         if entry.permissions.read {
-            match entry.mapping_type {
-                memory::MemoryMappingType::Empty => Err(Error::InsufficientPermissions),
-                memory::MemoryMappingType::Normal(_, f) => T::read_from_memory(f(self), address),
-                memory::MemoryMappingType::Special(_) => panic!()
-            }
+            let getter = entry.getter;
+            T::read_from_memory(getter(self), address)
         } else {
             Err(Error::InsufficientPermissions)
         }
@@ -216,11 +219,8 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         let address = self.instruction_pointer.ok_or(Error::InvalidAddress)?;
         let entry = self.memory_map.get(address)?;
         if entry.permissions.execute {
-            match entry.mapping_type {
-                memory::MemoryMappingType::Empty => Err(Error::InsufficientPermissions),
-                memory::MemoryMappingType::Normal(_, f) => definition::ExecutionToken::read_from_memory(f(self), address),
-                memory::MemoryMappingType::Special(_) => panic!()
-            }
+            let getter = entry.getter;
+            definition::ExecutionToken::read_from_memory(getter(self), address)
         } else {
             Err(Error::InsufficientPermissions)
         }
@@ -282,5 +282,60 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
             Some(xt) => self.execute(xt),
             None => Ok(())
         }
+    }
+}
+
+struct InternalStateMemory {
+    base: memory::Address,
+    members: Vec<(fn(&ForthState) -> value::Value, fn(&mut ForthState, value::Value))>
+}
+
+impl InternalStateMemory {
+    fn new(base: usize) -> Self {
+        let members: Vec<(fn(&ForthState) -> value::Value, fn(&mut ForthState, value::Value))> = vec![
+            // execution mode
+            (
+                |state| value::Value::Number(match state.execution_mode {
+                    ExecutionMode::Compile => 1,
+                    ExecutionMode::Interpret => 0
+                }),
+                |state, value| state.execution_mode = match value.to_number() {
+                    0 => ExecutionMode::Interpret,
+                    _ => ExecutionMode::Compile 
+                }
+            )
+        ];
+
+        Self { base: memory::Address::from_raw(base), members }
+    }
+    
+    fn get_base(&self) -> memory::Address {
+        self.base
+    }
+}
+
+impl memory::MemorySegment for ForthState<'_, '_, '_> {
+    fn get_base(&self) -> memory::Address {
+        self.internal_state_memory.base
+    }
+
+    fn get_end(&self) -> memory::Address {
+        self.internal_state_memory.base.plus_cell(self.internal_state_memory.members.len())
+    }
+
+    fn check_address(&self, address: memory::Address) -> Result<(), Error> {
+        if address.between(self.get_base(), self.get_end()){
+            Ok(())
+        } else {
+            Err(Error::InvalidAddress)
+        }
+    }
+
+    fn write_value(&mut self, address: memory::Address, value: value::Value) -> Result<(), Error> {
+        self.check_address(address).map(|_| self.internal_state_memory.members[address.cell_offset_from(self.get_base())].1(self, value))        
+    }
+
+    fn read_value(&self, address: memory::Address) -> Result<value::Value, Error> {
+        self.check_address(address).map(|_| self.internal_state_memory.members[address.cell_offset_from(self.get_base())].0(self))
     }
 }

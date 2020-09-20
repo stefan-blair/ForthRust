@@ -118,7 +118,7 @@ pub fn evaluate_string(state: &mut evaluate::ForthState) -> evaluate::ForthResul
     // read the characters into a vector
     let mut copied_string = Vec::new();
     for i in 0..length {
-        copied_string.push(state.read::<generic_numbers::UnsignedByte>(address.plus(i as memory::Offset))? as char);
+        copied_string.push(state.read::<generic_numbers::UnsignedByte>(address.plus(i as usize))? as char);
     }
     // convert that vector into an into_iter, which takes ownership of it, and prepend it to the current input stream
     state.input_stream.prepend_stream(copied_string.into_iter());
