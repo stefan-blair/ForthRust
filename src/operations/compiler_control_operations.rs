@@ -9,7 +9,7 @@ pub fn set_compile(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
 
 pub fn start_word_compilation(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
-    let address = state.memory.top();
+    let address = state.heap.top();
     let execution_token = evaluate::definition::ExecutionToken::Definition(address);
 
     // the IMMEDIATE keyword will edit the definition to be immediate
@@ -27,7 +27,7 @@ pub fn postpone(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let definition = state.definitions.get_from_token(state.input_stream.next()?)?;
 
     if definition.immediate {
-        Ok(state.memory.push(definition.execution_token))
+        Ok(state.heap.push(definition.execution_token))
     } else {
         instruction_compiler::InstructionCompiler::with_state(state).mem_push(definition.execution_token.value())
     }

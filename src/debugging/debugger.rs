@@ -85,7 +85,7 @@ impl<'a, 'i, 'o, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, 'i, 'o
         if let Some(breakpoint) = hit_breakpoint {
             debug_state.forth.state.output_stream.writeln("");
             debug_state.forth.state.output_stream.writeln("------------------------------------------------------");
-            debug_state.forth.state.output_stream.writeln(&format!("Hit breakpoint at {:#x}", breakpoint.to_offset()));
+            debug_state.forth.state.output_stream.writeln(&format!("Hit breakpoint at {:#x}", breakpoint.as_raw()));
             debug_state.debug(state);
         } else if debug_state.stepping {
             debug_state.forth.state.output_stream.writeln("");

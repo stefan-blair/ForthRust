@@ -12,14 +12,14 @@ pub fn print_newline(state: &mut evaluate::ForthState) -> evaluate::ForthResult 
 }
 
 pub fn print_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    state.memory.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+    state.heap.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
         // there must be an instruction pointer if its literally executing this
         let mut string_address = state.instruction_pointer.unwrap();
-        let length: generic_numbers::UnsignedByte = state.memory.read(string_address)?;
+        let length: generic_numbers::UnsignedByte = state.read(string_address)?;
         for _ in 0..length {
             // increment the string address and read the next character
             string_address.increment();
-            let c: generic_numbers::UnsignedByte = state.memory.read(string_address)?;
+            let c: generic_numbers::UnsignedByte = state.read(string_address)?;
             // print the byte as a character
             state.output_stream.write(&format!("{}", c as char));
         }
@@ -38,7 +38,7 @@ pub fn type_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let address: memory::Address = state.stack.pop()?;
 
     for i in 0..count {
-        let c: generic_numbers::UnsignedByte = state.memory.read(address.plus(i as memory::Offset))?;
+        let c: generic_numbers::UnsignedByte = state.read(address.plus(i as memory::Offset))?;
         state.output_stream.write(&format!("{}", c as char));
     }
 

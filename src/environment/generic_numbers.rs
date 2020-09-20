@@ -17,10 +17,9 @@ pub trait StackOperations<T> {
     fn pop_number_by_type(&mut self) -> Result<T, Error>;
 }
 
-pub trait MemoryOperations<T> {
-    fn read_number_by_type(&self, address: memory::Address) -> Result<T, Error>;
-    fn write_number_by_type(&mut self, address: memory::Address, value: T) -> Result<(), Error>;
-    fn push_number_by_type(&mut self, value: T);
+pub trait MemoryOperations {
+    fn read_number(memory_segment: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> where Self: Sized;
+    fn write_number(self, memory_segment: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error>;
 }
 
 /**
@@ -82,12 +81,12 @@ macro_rules! generic_number {
                 stack.pop_number_by_type()
             }
 
-            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
-                memory.write_number_by_type(address, self)
+            fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
+                self.write_number(memory, address)
             }
-
-            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
-                memory.read_number_by_type(address)
+            
+            fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+                Self::read_number(memory, address)
             }
 
             fn push_to_memory(self, memory: &mut memory::Memory) {
@@ -127,12 +126,12 @@ macro_rules! generic_number {
                 stack.pop_number_by_type().map(|number: $name| number as $unsigned_type)
             }
 
-            fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
-                memory.write_number_by_type(address, self as $name)
+            fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
+                (self as $name).write_number(memory, address)
             }
 
-            fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
-                let number: $name = memory.read_number_by_type(address)?;
+            fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+                let number = $name::read_number(memory, address)?;
                 Ok(number as $unsigned_type)
             }
 
@@ -170,6 +169,56 @@ pub trait AsValue {
 impl AsValue for Number {
     fn value(self) -> value::Value {
         value::Value::Number(self)
+    }
+}
+
+impl MemoryOperations for Byte {
+    fn read_number(memory_segment: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+        memory_segment.read_value(address).map(|value| value.to_number().to_chunks()[address.get_cell_byte()])
+    }
+
+    fn write_number(self, memory_segment: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
+        let value = memory_segment.read_value(address)?;
+        let mut bytes = value.to_number().to_chunks();
+        bytes[address.get_cell_byte()] = self;
+        memory_segment.write_value(address, Number::from_chunks(&bytes).value())
+    }
+}
+
+impl MemoryOperations for Number {
+    fn read_number(memory_segment: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+        memory_segment.read_value(address).map(|value| value.to_number())
+    }
+
+    fn write_number(self, memory_segment: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
+        memory_segment.write_value(address, value::Value::Number(self))
+    }
+}
+
+impl MemoryOperations for DoubleNumber {
+    fn read_number(memory_segment: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+        let a = memory_segment.read_value(address)?;
+        let b = memory_segment.read_value(address.plus_cell(1))?;
+        Ok(DoubleNumber::from_chunks(&[a.to_number(), b.to_number()]))
+    }
+
+    fn write_number(self, memory_segment: &mut dyn memory::MemorySegment, mut address: memory::Address) -> Result<(), Error> {
+        let chunks = self.to_chunks();
+        let mut address_probe = address;
+        
+        // first do a check to make sure this is a valid write position
+        for _ in chunks.iter() {
+            memory_segment.check_address(address_probe)?;
+            address_probe.increment_cell();
+        }
+
+        // then atomically do the write
+        for chunk in chunks {
+            memory_segment.write_value(address, chunk.value())?;
+            address.increment_cell();
+        }
+
+        Ok(())
     }
 }
 

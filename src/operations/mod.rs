@@ -57,7 +57,7 @@ mod helper_macros {
     #[macro_export]
     macro_rules! postpone {
         ($state:expr, $execution_token:expr) => {
-            $state.memory.push(evaluate::definition::ExecutionToken::LeafOperation($execution_token).value());
+            $state.heap.push(evaluate::definition::ExecutionToken::LeafOperation($execution_token).value());
         };
     }
 }

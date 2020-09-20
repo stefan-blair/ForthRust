@@ -8,7 +8,7 @@ use crate::operations;
  * Helper functions
  */
 fn stringify_address(addr: environment::memory::Address) -> String {
-    format!("{:#x}", addr.to_offset())
+    format!("{:#x}", addr.as_raw())
 }
 
 pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evaluate::definition::ExecutionToken) -> String {
@@ -26,11 +26,11 @@ pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evalua
 }
 
 fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
-    let length: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address).unwrap();
+    let length: environment::generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
     let mut buffer = String::new();
     for _ in 0..length {
         address.increment();
-        buffer.push(debug_target.memory.read::<environment::generic_numbers::UnsignedByte>(address).unwrap() as char);
+        buffer.push(debug_target.read::<environment::generic_numbers::UnsignedByte>(address).unwrap() as char);
     }
 
     buffer
@@ -39,7 +39,7 @@ fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: envir
 fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: environment::memory::Address) -> String {
     let mut buffer = String::new();
     loop {
-        let byte: environment::generic_numbers::UnsignedByte = debug_target.memory.read(address).unwrap();
+        let byte: environment::generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
         if byte == 0 {
             return buffer;
         } else {
@@ -52,14 +52,14 @@ fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address:
 
 fn read_from_address(debug_target: &evaluate::ForthState, address: environment::memory::Address, format: &str) -> String {    
     match format {
-        "I" => stringify_execution_token(&debug_target, debug_target.memory.read(address).unwrap()),
-        "A" => format!("--> {}", read_from_address(debug_target, debug_target.memory.read(address).unwrap(), format)),
-        "N" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Number>(address).unwrap()),
-        "D" => format!("{}", debug_target.memory.read::<environment::generic_numbers::DoubleNumber>(address).unwrap()),
-        "B" => format!("{}", debug_target.memory.read::<environment::generic_numbers::Byte>(address).unwrap()),
-        "UN" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedNumber>(address).unwrap()),
-        "UD" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedDoubleNumber>(address).unwrap()),
-        "UB" => format!("{}", debug_target.memory.read::<environment::generic_numbers::UnsignedByte>(address).unwrap()),
+        "I" => stringify_execution_token(&debug_target, debug_target.read(address).unwrap()),
+        "A" => format!("--> {}", read_from_address(debug_target, debug_target.read(address).unwrap(), format)),
+        "N" => format!("{}", debug_target.read::<environment::generic_numbers::Number>(address).unwrap()),
+        "D" => format!("{}", debug_target.read::<environment::generic_numbers::DoubleNumber>(address).unwrap()),
+        "B" => format!("{}", debug_target.read::<environment::generic_numbers::Byte>(address).unwrap()),
+        "UN" => format!("{}", debug_target.read::<environment::generic_numbers::UnsignedNumber>(address).unwrap()),
+        "UD" => format!("{}", debug_target.read::<environment::generic_numbers::UnsignedDoubleNumber>(address).unwrap()),
+        "UB" => format!("{}", debug_target.read::<environment::generic_numbers::UnsignedByte>(address).unwrap()),
         "LS" => read_length_string_at(debug_target, address),
         "S" => read_null_terminated_string(debug_target, address),
         _ => "Unknown format specifier".to_string()
@@ -85,7 +85,7 @@ fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String,
 }
 
 fn print_memory_formatted(debug_target: &evaluate::ForthState, range: Option<(usize, usize)>, io: evaluate::ForthIO) {
-    let memory = debug_target.memory.debug_only_get_vec();
+    let memory = debug_target.heap.debug_only_get_vec();
     let variables = get_variables(debug_target);
     let (start, end) = range.unwrap_or((0, memory.len()));
     for (i, value) in memory.iter().enumerate().skip(start).take(end - start) {
@@ -235,7 +235,7 @@ pub(in super) fn see(debugger_state: &mut debugger::DebugState, debug_target: &m
         while {
             end.increment_cell();
             let break_operation = evaluate::definition::ExecutionToken::LeafOperation(operations::control_flow_operations::control_flow_break);
-            let current_operation = debug_target.memory.read::<evaluate::definition::ExecutionToken>(end).unwrap();
+            let current_operation = debug_target.read::<evaluate::definition::ExecutionToken>(end).unwrap();
             break_operation != current_operation
         } {}
         end.increment_cell();

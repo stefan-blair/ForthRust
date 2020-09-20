@@ -20,7 +20,7 @@ impl ExecutionToken {
         match self {
             Self::LeafOperation(fptr) => fptr as memory::Offset,
             Self::CompiledInstruction(i) => i,
-            Self::Definition(address) => address.to_offset(),
+            Self::Definition(address) => address.as_raw(),
             Self::Number(i) => i as memory::Offset
         }
     }
@@ -79,11 +79,11 @@ impl value::ValueVariant for ExecutionToken {
         }
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
+    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
         memory.write_value(address, self.value())
     }
-
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
+    
+    fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
         memory.read_value(address).map(|value| match value {
             value::Value::ExecutionToken(xt) => xt,
             value::Value::Number(n) => ExecutionToken::Number(n)

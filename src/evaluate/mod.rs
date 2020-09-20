@@ -2,7 +2,7 @@ pub mod definition;
 pub mod kernels;
 
 use crate::operations;
-use crate::environment::{memory, stack};
+use crate::environment::{memory::{self, MemorySegment}, stack, value::{self, ValueVariant}};
 use crate::io::{tokens, output_stream};
 use crate::compiled_instructions;
 
@@ -19,6 +19,7 @@ pub enum Error {
     InvalidNumber,
     InvalidExecutionToken,
     AddressOutOfRange,
+    InsufficientPermissions,
     NoMoreTokens,
     Exception(u64),
     
@@ -129,7 +130,8 @@ pub struct ForthState<'a, 'i, 'o> {
     // the return stack is not actually used as a return stack, but is still provided for other uses
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
-    pub memory: memory::Memory,
+    pub heap: memory::Memory,
+    pub memory_map: memory::MemoryMap,
 
     pub execution_mode: ExecutionMode,
     // pointer to the next instruction to execute
@@ -144,13 +146,21 @@ pub struct ForthState<'a, 'i, 'o> {
 // split it up into some sort of ForthState vs. ForthMachine, so ForthMachine -> ForthState -> ForthEvaluator ...
 impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn new() -> Self {
+        let heap = memory::Memory::new(0x7feaddead000);
+        let stack = stack::Stack::new(0x7aceddead000);
+        let return_stack = stack::Stack::new(0x56cadeace000);
+
+        let memory_map = memory::MemoryMap::new(vec![
+            memory::MemoryMapping::new(heap.get_base(), memory::MemoryPermissions::all(), |state| &state.heap, |state| &mut state.heap),
+            memory::MemoryMapping::new(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack),
+            memory::MemoryMapping::new(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack)
+        ]);
+
         Self {
             compiled_instructions: compiled_instructions::CompiledInstructions::new(),
             definitions: definition::DefinitionSet::new(),
 
-            return_stack: stack::Stack::new(),
-            stack: stack::Stack::new(),
-            memory: memory::Memory::new(),
+            heap, stack, return_stack, memory_map,
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
@@ -174,6 +184,46 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn with_operations(mut self, operations: operations::OperationTable) -> Self {
         self.add_operations(operations);
         self
+    }
+
+    pub fn write<T: value::ValueVariant>(&mut self, address: memory::Address, value: T) -> Result<(), Error> {
+        let entry = self.memory_map.get(address)?;
+        if entry.permissions.write {
+            match entry.mapping_type {
+                memory::MemoryMappingType::Empty => Err(Error::InsufficientPermissions),
+                memory::MemoryMappingType::Normal(f, _) => value.write_to_memory(f(self), address),
+                memory::MemoryMappingType::Special(_) => panic!()
+            }
+        } else {
+            Err(Error::InsufficientPermissions)
+        }
+    }
+
+    pub fn read<T: value::ValueVariant>(&self, address: memory::Address) -> Result<T, Error> {
+        let entry = self.memory_map.get(address)?;
+        if entry.permissions.read {
+            match entry.mapping_type {
+                memory::MemoryMappingType::Empty => Err(Error::InsufficientPermissions),
+                memory::MemoryMappingType::Normal(_, f) => T::read_from_memory(f(self), address),
+                memory::MemoryMappingType::Special(_) => panic!()
+            }
+        } else {
+            Err(Error::InsufficientPermissions)
+        }
+    }
+
+    fn read_instruction_pointer(&self) -> Result<definition::ExecutionToken, Error> {
+        let address = self.instruction_pointer.ok_or(Error::InvalidAddress)?;
+        let entry = self.memory_map.get(address)?;
+        if entry.permissions.execute {
+            match entry.mapping_type {
+                memory::MemoryMappingType::Empty => Err(Error::InsufficientPermissions),
+                memory::MemoryMappingType::Normal(_, f) => definition::ExecutionToken::read_from_memory(f(self), address),
+                memory::MemoryMappingType::Special(_) => panic!()
+            }
+        } else {
+            Err(Error::InsufficientPermissions)
+        }
     }
 
     pub fn execute(&mut self, execution_token: definition::ExecutionToken) -> ForthResult {
@@ -213,14 +263,11 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     }
 
     fn fetch_current_instruction(&mut self) -> ForthResult {
-        self.instruction_pointer.ok_or(Error::InvalidAddress)
-            .map(|instruction_pointer| {
-                // fetch the current instruction
-                self.current_instruction = self.memory.read(instruction_pointer).ok();
-            }).or_else(|_| self.input_stream.next().ok().ok_or(Error::TokenStreamEmpty)
+        self.read_instruction_pointer().map(|current_instruction| self.current_instruction = Some(current_instruction))
+            .or_else(|_| self.input_stream.next().ok().ok_or(Error::TokenStreamEmpty)
             .and_then(|token| self.definitions.get_from_token(token))
             .map(|definition| if self.execution_mode == ExecutionMode::Compile && !definition.immediate {
-                self.memory.push(definition.execution_token.value());
+                self.heap.push(definition.execution_token.value());
                 self.current_instruction = None;
             } else {
                 self.current_instruction = Some(definition.execution_token);

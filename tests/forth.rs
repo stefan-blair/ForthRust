@@ -381,7 +381,7 @@ fn locals_test() {
 #[test]
 fn create_test() {
     let mut f = Forth::<kernels::DefaultKernel>::new();
-    assert!(f.evaluate_string(": test CREATE dup dup 1 ;").is_ok());
+    assert!(f.evaluate_string(": test CREATE dup dup 1 1 CELLS ALLOT ;").is_ok());
     assert!(f.evaluate_string("2 test whatever 2 whatever ! whatever whatever @").is_ok());
     assert_eq!(vec![2, 2, 2, 1, 232, 2], stack_to_vec(&mut f.state.stack));
 }
@@ -389,7 +389,7 @@ fn create_test() {
 #[test]
 fn create_does_test() {
     let mut f = Forth::<kernels::DefaultKernel>::new();
-    assert!(f.evaluate_string(": test CREATE dup dup 1 DOES> dup @ ;").is_ok());
+    assert!(f.evaluate_string(": test CREATE dup dup 1 1 CELLS ALLOT DOES> dup @ ;").is_ok());
     assert!(f.evaluate_string("2 test whatever whatever DROP 5 SWAP ! whatever").is_ok());
     assert_eq!(vec![2, 2, 2, 1, 264, 5], stack_to_vec(&mut f.state.stack));
 }

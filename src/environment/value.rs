@@ -8,8 +8,8 @@ pub trait ValueVariant: std::marker::Sized + Copy + Clone + ToString {
     // connector functions used for stack and memory operations
     fn push_to_stack(self, stack: &mut stack::Stack);
     fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error>;
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error>;
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error>;
+    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error>;
+    fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error>;
     fn push_to_memory(self, memory: &mut memory::Memory);
     // the size, in number of cells (aka, the size of one Value)
     fn size() -> memory::Offset;
@@ -39,11 +39,11 @@ impl ValueVariant for Value {
         stack.pop_value()
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
+    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
         memory.write_value(address, self)
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
+    fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
         memory.read_value(address)
     }
 
@@ -78,17 +78,17 @@ impl ValueVariant for DoubleValue {
         Ok(DoubleValue(stack.pop()?, stack.pop()?))
     }
 
-    fn write_to_memory(self, memory: &mut memory::Memory, address: memory::Address) -> Result<(), Error> {
+    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
         memory.check_address(address).and(memory.check_address(address.plus_cell(1))).and_then(|_| {
-            memory.write(address, self.0)?;
-            memory.write(address.plus_cell(1), self.1)?;
+            memory.write_value(address, self.0)?;
+            memory.write_value(address.plus_cell(1), self.1)?;
             Ok(())
         })
     }
 
-    fn read_from_memory(memory: &memory::Memory, address: memory::Address) -> Result<Self, Error> {
-        let a = memory.read(address)?;
-        let b = memory.read(address.plus_cell(1))?;
+    fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+        let a = memory.read_value(address)?;
+        let b = memory.read_value(address.plus_cell(1))?;
         Ok(DoubleValue(a, b))
     }
 

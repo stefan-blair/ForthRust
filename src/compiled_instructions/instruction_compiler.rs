@@ -34,7 +34,7 @@ impl<N: value::ValueVariant> ToString for Push<N> {
 struct MemPush<N: value::ValueVariant>(N);
 impl<'a, N: value::ValueVariant + 'a> CompiledInstruction<'a> for MemPush<N> {
     fn execute(&self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-        Ok(state.memory.push(self.0))
+        Ok(state.heap.push(self.0))
     }
 }
 impl<N: value::ValueVariant> ToString for MemPush<N> {
@@ -109,9 +109,9 @@ impl<'a, 'b, 'c, 'd> InstructionCompiler<'a, 'b, 'c, 'd> {
     fn compile_instruction<T: CompiledInstruction<'b> + 'b>(&mut self, instruction: T) -> ForthResult {
         let xt = self.state.compiled_instructions.add(Box::new(instruction));
         if let Some(address) = self.address {
-            self.state.memory.write(address, xt)
+            self.state.write(address, xt)
         } else {
-            Ok(self.state.memory.push(xt))
+            Ok(self.state.heap.push(xt))
         }
     }
 }

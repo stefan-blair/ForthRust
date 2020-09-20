@@ -9,7 +9,7 @@ pub fn get_char(state: &mut ForthState) -> ForthResult {
 }
 
 pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthResult {
-    let length_address = state.memory.top();
+    let length_address = state.heap.top();
     let mut string_address = length_address.plus(1);
     let mut length: generic_numbers::UnsignedByte = 0;
     loop {
@@ -17,22 +17,22 @@ pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthRe
         if next_char == delimiter {
             break;
         } else {
-            if !string_address.less_than(state.memory.top()) {
-                state.memory.push_none::<value::Value>();
+            if !string_address.less_than(state.heap.top()) {
+                state.heap.push_none::<value::Value>();
             }
-            state.memory.write(string_address, next_char as generic_numbers::UnsignedByte)?;
+            state.write(string_address, next_char as generic_numbers::UnsignedByte)?;
             string_address.increment();
             length += 1;
         }
     }
-    state.memory.write(length_address, length)?;
+    state.write(length_address, length)?;
 
     Ok(())
 }
 
 pub fn get_word(state: &mut ForthState) -> ForthResult {
     let delimiter = state.stack.pop::<generic_numbers::UnsignedByte>()? as char;
-    let address = state.memory.top();
+    let address = state.heap.top();
     read_string_to_memory(state, delimiter).map(|_| state.stack.push(address))
 }
 
@@ -42,7 +42,7 @@ pub fn trailing(state: &mut ForthState) -> ForthResult {
 
     let mut new_count = 0;
     for i in 0..count {
-        let current_char = state.memory.read::<generic_numbers::UnsignedByte>(address.plus(i as memory::Offset))? as char;
+        let current_char = state.read::<generic_numbers::UnsignedByte>(address.plus(i as memory::Offset))? as char;
         if current_char.is_ascii() && !current_char.is_whitespace() {
             new_count = i + 1;
         }
@@ -60,8 +60,8 @@ pub fn cmove(state: &mut ForthState) -> ForthResult {
     let source: memory::Address = state.stack.pop()?;
 
     for i in 0..count {
-        let current_byte = state.memory.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?;
-        state.memory.write(destination.plus(i as memory::Offset), current_byte)?;
+        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?;
+        state.write(destination.plus(i as memory::Offset), current_byte)?;
     }
 
     Ok(())
@@ -73,8 +73,8 @@ pub fn cmove_backwards(state: &mut ForthState) -> ForthResult {
     let source: memory::Address = state.stack.pop()?;
 
     for i in (count - 1)..0 {
-        let current_byte = state.memory.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?;
-        state.memory.write(destination.plus(i as memory::Offset), current_byte)?;
+        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?;
+        state.write(destination.plus(i as memory::Offset), current_byte)?;
     }
 
     Ok(())
@@ -87,11 +87,11 @@ pub fn move_noclobber(state: &mut ForthState) -> ForthResult {
     
     let mut bytes = Vec::new();
     for i in 0..count {
-        bytes.push(state.memory.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?);
+        bytes.push(state.read::<generic_numbers::UnsignedByte>(source.plus(i as memory::Offset))?);
     }
 
     for (i, byte) in bytes.into_iter().enumerate() {
-        state.memory.write(destination.plus(i as memory::Offset), byte)?;
+        state.write(destination.plus(i as memory::Offset), byte)?;
     }
 
     Ok(())
@@ -109,7 +109,7 @@ pub fn accept(state: &mut ForthState) -> ForthResult {
             break;
         }
 
-        state.memory.write(address.plus(copied_characters as memory::Offset), current_char as generic_numbers::UnsignedByte)?;
+        state.write(address.plus(copied_characters as memory::Offset), current_char as generic_numbers::UnsignedByte)?;
         copied_characters += 1;
     }
 
@@ -119,7 +119,7 @@ pub fn accept(state: &mut ForthState) -> ForthResult {
 pub fn count(state: &mut ForthState) -> ForthResult {
     let address: memory::Address = state.stack.pop()?;
     
-    let length = state.memory.read::<generic_numbers::UnsignedByte>(address)?;
+    let length = state.read::<generic_numbers::UnsignedByte>(address)?;
     state.stack.push(address.plus(1));
     state.stack.push(length);
 

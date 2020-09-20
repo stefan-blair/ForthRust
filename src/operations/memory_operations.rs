@@ -3,18 +3,18 @@ use super::*;
 
 pub fn dereference<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let address = state.stack.pop()?;
-    state.stack.push(state.memory.read::<N>(address)?);
+    state.stack.push(state.read::<N>(address)?);
     Ok(())
 }
 
 pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let (address, value) = (state.stack.pop()?, state.stack.pop::<N>()?);
 
-    state.memory.write(address, value)
+    state.write(address, value)
 }
 
 pub fn pop_write(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    state.memory.push(state.stack.pop::<value::Value>()?);
+    state.heap.push(state.stack.pop::<value::Value>()?);
     Ok(())
 }
 

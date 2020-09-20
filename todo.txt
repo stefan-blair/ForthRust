@@ -4,6 +4,8 @@ implementation:
     memory -> heap, make addresses / reading / writing happen in ForthState
         add multiple memory segments, heap thing, string storage
 
+    remove the memory::Offset bs, just use usize
+
     add in half words (4 bytes instead of 8)
     make length-string and instruction into ValueVarients.  instruction would be a bit tricky though, would have to waste a cell with arguments count
 
