@@ -95,6 +95,16 @@ impl<'a, 'i, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'o, KERNEL> {
         self.state.input_stream = tokens::TokenStream::new(stream);
     }
 
+    pub fn evaluate_string(&mut self, input: &'i str) -> ForthResult {
+        self.set_input_string(input);
+        self.evaluate()
+    }
+
+    pub fn evaluate_stream<I: Iterator<Item = char> + 'i>(&mut self, stream: I) -> ForthResult {
+        self.set_input_stream(stream);
+        self.evaluate()
+    }
+    
     pub fn evaluate(&mut self) -> ForthResult {    
         loop {
             match self.kernel.evaluate_chain(&mut self.state)
@@ -109,16 +119,6 @@ impl<'a, 'i, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'o, KERNEL> {
         }
         Ok(())
     }
-
-    pub fn evaluate_string(&mut self, input: &'i str) -> ForthResult {
-        self.set_input_string(input);
-        self.evaluate()
-    }
-
-    pub fn evaluate_stream<I: Iterator<Item = char> + 'i>(&mut self, stream: I) -> ForthResult {
-        self.set_input_stream(stream);
-        self.evaluate()
-    }
 }
 
 /**
@@ -131,26 +131,29 @@ pub struct ForthState<'a, 'i, 'o> {
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
     pub heap: memory::Memory,
+    pub pad: memory::Memory,
+
+    // keeps track of different memory segments, where they are mapped to (virtually), and their permissions
     memory_map: memory::MemoryMap,
     // different fields of the state can be accessed by the running program as memory
     internal_state_memory: InternalStateMemory,
 
-    pub execution_mode: ExecutionMode,
+    execution_mode: ExecutionMode,
     // pointer to the next instruction to execute
-    pub instruction_pointer: Option<memory::Address>,
+    instruction_pointer: Option<memory::Address>,
     // contains the current instruction, if any, being executed
-    pub current_instruction: Option<definition::ExecutionToken>,
+    current_instruction: Option<definition::ExecutionToken>,
 
     pub output_stream: Box<dyn output_stream::OutputStream + 'o>,
     pub input_stream: tokens::TokenStream<'i>
 }
 
-// split it up into some sort of ForthState vs. ForthMachine, so ForthMachine -> ForthState -> ForthEvaluator ...
 impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn new() -> Self {
-        let heap = memory::Memory::new(0x7feaddead000);
-        let stack = stack::Stack::new(0x7aceddead000);
         let return_stack = stack::Stack::new(0x56cadeace000);
+        let stack = stack::Stack::new(0x7aceddead000);
+        let heap = memory::Memory::new(0x7feaddead000);
+        let pad = memory::Memory::new(0x76beaded5000);
 
         let internal_state_memory = InternalStateMemory::new(0x5deadbeef000);
 
@@ -158,14 +161,15 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
             memory::MemoryMapping::new(heap.get_base(), memory::MemoryPermissions::all(), |state| &state.heap, |state| &mut state.heap, "heap"),
             memory::MemoryMapping::new(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack, "stack"),
             memory::MemoryMapping::new(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack, "return stack"),
-            memory::MemoryMapping::new(internal_state_memory.get_base(), memory::MemoryPermissions::readonly(), |state| state, |state| state, ""),
+            memory::MemoryMapping::new(pad.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.pad, |state| &mut state.pad, "pad"),
+            memory::MemoryMapping::new(internal_state_memory.get_base(), memory::MemoryPermissions::readonly(), |state| state, |state| state, "[internal mappings]"),
         ]);
 
         Self {
             compiled_instructions: compiled_instructions::CompiledInstructions::new(),
             definitions: definition::DefinitionSet::new(),
 
-            heap, stack, return_stack, memory_map, internal_state_memory,
+            heap, stack, return_stack, pad,  memory_map, internal_state_memory,
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
@@ -182,6 +186,18 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
     pub fn get_memory_map(&self) -> memory::MemoryMap {
         self.memory_map.clone()
+    }
+
+    pub fn execution_mode(&self) -> ExecutionMode {
+        self.execution_mode
+    }
+
+    pub fn instruction_pointer(&self) -> Option<memory::Address> {
+        self.instruction_pointer
+    }
+
+    pub fn current_instruction(&self) -> Option<definition::ExecutionToken> {
+        self.current_instruction
     }
 
     pub fn add_operations(&mut self, operations: operations::OperationTable) {
@@ -283,6 +299,12 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
             None => Ok(())
         }
     }
+}
+
+struct StateRegister {
+    address: memory::Address,
+    read: fn(&ForthState) -> value::Value,
+    write: fn(&mut ForthState, value::Value),
 }
 
 struct InternalStateMemory {

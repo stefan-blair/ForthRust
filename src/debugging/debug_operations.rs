@@ -25,23 +25,23 @@ pub fn stringify_execution_token(debug_target: &evaluate::ForthState, xt: evalua
     }
 }
 
-fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: memory::Address) -> String {
-    let length: generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
+fn read_length_string_at(debug_target: &evaluate::ForthState, mut address: memory::Address) -> Result<String, evaluate::Error> {
+    let length: generic_numbers::UnsignedByte = debug_target.read(address)?;
     let mut buffer = String::new();
     for _ in 0..length {
         address.increment();
-        buffer.push(debug_target.read::<generic_numbers::UnsignedByte>(address).unwrap() as char);
+        buffer.push(debug_target.read::<generic_numbers::UnsignedByte>(address)? as char);
     }
 
-    buffer
+    Ok(buffer)
 }
 
-fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: memory::Address) -> String {
+fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address: memory::Address) -> Result<String, evaluate::Error> {
     let mut buffer = String::new();
     loop {
-        let byte: generic_numbers::UnsignedByte = debug_target.read(address).unwrap();
+        let byte: generic_numbers::UnsignedByte = debug_target.read(address)?;
         if byte == 0 {
-            return buffer;
+            return Ok(buffer);
         } else {
             buffer.push(byte as char);
         }
@@ -50,20 +50,20 @@ fn read_null_terminated_string(debug_target: &evaluate::ForthState, mut address:
     }
 }
 
-fn read_from_address(debug_target: &evaluate::ForthState, address: memory::Address, format: &str) -> String {    
-    match format {
-        "I" => stringify_execution_token(&debug_target, debug_target.read(address).unwrap()),
-        "A" => format!("--> {}", read_from_address(debug_target, debug_target.read(address).unwrap(), format)),
-        "N" => format!("{}", debug_target.read::<generic_numbers::Number>(address).unwrap()),
-        "D" => format!("{}", debug_target.read::<generic_numbers::DoubleNumber>(address).unwrap()),
-        "B" => format!("{}", debug_target.read::<generic_numbers::Byte>(address).unwrap()),
-        "UN" => format!("{}", debug_target.read::<generic_numbers::UnsignedNumber>(address).unwrap()),
-        "UD" => format!("{}", debug_target.read::<generic_numbers::UnsignedDoubleNumber>(address).unwrap()),
-        "UB" => format!("{}", debug_target.read::<generic_numbers::UnsignedByte>(address).unwrap()),
-        "LS" => read_length_string_at(debug_target, address),
-        "S" => read_null_terminated_string(debug_target, address),
+fn read_from_address(debug_target: &evaluate::ForthState, address: memory::Address, format: &str) -> Result<String, evaluate::Error> {    
+    Ok(match format {
+        "I" => stringify_execution_token(&debug_target, debug_target.read(address)?),
+        "A" => format!("--> {}", read_from_address(debug_target, debug_target.read(address)?, format)?),
+        "N" => format!("{}", debug_target.read::<generic_numbers::Number>(address)?),
+        "D" => format!("{}", debug_target.read::<generic_numbers::DoubleNumber>(address)?),
+        "B" => format!("{}", debug_target.read::<generic_numbers::Byte>(address)?),
+        "UN" => format!("{}", debug_target.read::<generic_numbers::UnsignedNumber>(address)?),
+        "UD" => format!("{}", debug_target.read::<generic_numbers::UnsignedDoubleNumber>(address)?),
+        "UB" => format!("{}", debug_target.read::<generic_numbers::UnsignedByte>(address)?),
+        "LS" => read_length_string_at(debug_target, address)?,
+        "S" => read_null_terminated_string(debug_target, address)?,
         _ => "Unknown format specifier".to_string()
-    }
+    })
 }
 
 fn print_stack_formatted(debug_target: &evaluate::ForthState, values: &[value::Value], io: evaluate::ForthIO) {
@@ -103,7 +103,7 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, address: memory::
                 None => "".to_string()
             }
         };
-        let is_instruction_pointer = if Some(current_address) == debug_target.instruction_pointer {
+        let is_instruction_pointer = if Some(current_address) == debug_target.instruction_pointer() {
             " ip -> "
         } else {
             "       "
@@ -121,36 +121,41 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, address: memory::
 /**
  * Debug operations.
  */
-pub(in super) fn view_memory_region(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    println!("viewing memory region");
-    let label = debugger_state.forth.state.input_stream.next_word().unwrap();
+pub(in super) fn view_memory_region(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let label = debugger_state.forth.state.input_stream.next_word()?;
     for mapping in debug_target.get_memory_map().get_entries().iter() {
         if label == mapping.label.to_uppercase() {
-            return print_memory_formatted(debug_target, mapping.base, None, debugger_state.forth.state.get_forth_io());
+            return Ok(print_memory_formatted(debug_target, mapping.base, None, debugger_state.forth.state.get_forth_io()));
         }
     }
+
+    Err(evaluate::Error::UnknownWord(label))
 }
 
-pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
     debugger_state.forth.state.output_stream.writeln("memory mapping:");
     for mapping in debug_target.get_memory_map().get_entries().iter() {
         debugger_state.forth.state.output_stream.writeln(&format!("{}   {}  | {}", stringify_address(mapping.base), mapping.permissions.to_string(), mapping.label));
     }
+
+    Ok(())
 }
 
-pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    let address = debugger_state.forth.state.stack.pop().unwrap();
-    let format = debugger_state.forth.state.input_stream.next_word().unwrap();
-    debugger_state.forth.state.output_stream.writeln(&read_from_address(debug_target, address, &format[..]));
+pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let address = debugger_state.forth.state.stack.pop()?;
+    let format = debugger_state.forth.state.input_stream.next_word()?;
+    debugger_state.forth.state.output_stream.writeln(&read_from_address(debug_target, address, &format[..])?);
+
+    Ok(())
 }
 
-pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    let instruction_pointer = debug_target.instruction_pointer.map(|addr| stringify_address(addr)).unwrap_or("(awaiting input)".to_string());
-    let execution_mode = match debug_target.execution_mode {
+pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let instruction_pointer = debug_target.instruction_pointer().map(|addr| stringify_address(addr)).unwrap_or("(awaiting input)".to_string());
+    let execution_mode = match debug_target.execution_mode() {
         evaluate::ExecutionMode::Compile => "compiling",
         evaluate::ExecutionMode::Interpret => "interpreting",
     }.to_string();
-    let current_instruction = debug_target.current_instruction.map(|xt| stringify_execution_token(debug_target, xt)).unwrap_or("(awaiting instruction)".to_string());
+    let current_instruction = debug_target.current_instruction().map(|xt| stringify_execution_token(debug_target, xt)).unwrap_or("(awaiting instruction)".to_string());
 
     if let Some(error) = &debugger_state.current_error {
         debugger_state.forth.state.output_stream.writeln("######################################################");
@@ -174,7 +179,7 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     }
     
     debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
-    if let Some(instruction_pointer) = debug_target.instruction_pointer {
+    if let Some(instruction_pointer) = debug_target.instruction_pointer() {
         debugger_state.forth.state.output_stream.writeln("memory:\n");
         let start = if debug_target.read::<value::Value>(instruction_pointer.minus_cell(3)).is_ok() {
             instruction_pointer.minus_cell(3)
@@ -189,9 +194,11 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     debugger_state.forth.state.output_stream.writeln("stack:\n");
     print_stack_formatted(debug_target, &stack_vec[..std::cmp::min(10, stack_vec.len())], debugger_state.forth.state.get_forth_io());
     debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
+
+    Ok(())
 }
 
-pub(in super) fn all_commands(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
+pub(in super) fn all_commands(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
     for (word, nametag) in debug_target.definitions.debug_only_get_nametag_map().iter() {
         let definition = debug_target.definitions.get(*nametag);
         let immediate_string = if definition.immediate {
@@ -202,40 +209,47 @@ pub(in super) fn all_commands(debugger_state: &mut debugger::DebugState, debug_t
 
         debugger_state.forth.state.output_stream.writeln(&format!("{:<15}: {:<10} {}", word, immediate_string, stringify_execution_token(debug_target, definition.execution_token)))
     }
+
+    Ok(())
 }
 
-pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
-    let address = debugger_state.forth.state.stack.pop().unwrap();
+pub(in super) fn add_break(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let address = debugger_state.forth.state.stack.pop()?;
     debugger_state.breakpoints.push(address);
     debugger_state.forth.state.output_stream.writeln(&format!("Set breakpoint @ {}", stringify_address(address)));
+    
+    Ok(())
 }
 
-pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
+pub(in super) fn step(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) -> evaluate::ForthResult {
     debugger_state.forth.state.output_stream.writeln("Stepping...");
     debugger_state.stepping = true;
     debugger_state.debugging = false;
     debugger_state.current_error = None;
+    
+    Ok(())
 }
 
-pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
+pub(in super) fn do_continue(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) -> evaluate::ForthResult {
     debugger_state.forth.state.output_stream.writeln("Continuing");
     debugger_state.stepping = false;
     debugger_state.debugging = false;
     debugger_state.current_error = None;
+    
+    Ok(())
 }
 
-pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) {
+pub(in super) fn do_exit(debugger_state: &mut debugger::DebugState, _: &mut evaluate::ForthState) -> evaluate::ForthResult {
     debugger_state.forth.state.output_stream.writeln("Exiting...");
     debugger_state.stepping = false;
     debugger_state.debugging = false;
     debugger_state.current_error = debugger_state.current_error.take().or(Some(evaluate::Error::Halt));
+    
+    Ok(())
 }
 
-pub(in super) fn see(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) {
-    let definition = match debug_target.definitions.get_from_token(debugger_state.forth.state.input_stream.next().unwrap()) {
-        Ok(definition) => definition,
-        _ => return debugger_state.forth.state.output_stream.writeln("No definition found")
-    };
+pub(in super) fn see(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let definition = debug_target.definitions.get_from_token(debugger_state.forth.state.input_stream.next()?)?;
 
     debugger_state.forth.state.output_stream.writeln(&stringify_execution_token(debug_target, definition.execution_token));
     if let evaluate::definition::ExecutionToken::Definition(address) = definition.execution_token {
@@ -243,16 +257,18 @@ pub(in super) fn see(debugger_state: &mut debugger::DebugState, debug_target: &m
         while {
             end.increment_cell();
             let break_operation = evaluate::definition::ExecutionToken::LeafOperation(operations::control_flow_operations::control_flow_break);
-            let current_operation = debug_target.read::<evaluate::definition::ExecutionToken>(end).unwrap();
+            let current_operation = debug_target.read::<evaluate::definition::ExecutionToken>(end)?;
             break_operation != current_operation
         } {}
         end.increment_cell();
 
         print_memory_formatted(debug_target, address, Some(end), debugger_state.forth.state.get_forth_io());
     }
+    
+    Ok(())
 }
 
-pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState);
+pub(in super) type DebugOperation = fn(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult;
 
 pub(in super) const DEBUG_OPERATIONS: &[(&str, DebugOperation)] = &[
     ("XVIEW", view_memory_region),

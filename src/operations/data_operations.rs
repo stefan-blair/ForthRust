@@ -35,7 +35,7 @@ pub fn constant<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> eva
 
     let address = state.heap.top();
     state.heap.push(definition::ExecutionToken::LeafOperation(|state| {
-        let value: N = state.read(state.instruction_pointer.unwrap())?;
+        let value: N = state.read(state.instruction_pointer().unwrap())?;
         state.stack.push(value);
         state.return_from()
     }));
@@ -53,7 +53,7 @@ pub fn does(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
         return Ok(())
     };
 
-    state.write(object_address.plus_cell(1), definition::ExecutionToken::Definition(state.instruction_pointer.unwrap()))?;
+    state.write(object_address.plus_cell(1), definition::ExecutionToken::Definition(state.instruction_pointer().unwrap()))?;
 
     // add a manual break, so that normal calls to the function wont execute the rest of the code, only created objects
     state.return_from()

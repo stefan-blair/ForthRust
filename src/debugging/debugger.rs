@@ -29,23 +29,21 @@ impl <'a, 'i, 'o> DebugState<'a, 'i, 'o> {
     }
 
     fn debug(&mut self, state: &mut evaluate::ForthState) {
-        debug_operations::view_state(self, state);
+        debug_operations::view_state(self, state).unwrap();
         // await and execute debug commands
         self.debugging = true;
         while self.debugging {
-            let result = match self.forth.evaluate() {
-                Result::Err(evaluate::Error::UnknownWord(word)) => {
-                    match self.debug_operations.get(&word).ok_or(evaluate::Error::UnknownWord(word)) {
-                    Ok(op) => Ok(op(self, state)),
-                    error => error.map(|_|())
-                }}
-                result => {
-                    result
-                }
-            };
-
-            if let Result::Err(_) = result {
-                break;
+            let result = self.forth.evaluate()
+                .or_else(|e| if let evaluate::Error::UnknownWord(word) = e {
+                    self.debug_operations.get(&word)
+                        .ok_or(evaluate::Error::UnknownWord(word))
+                        .map(|op| *op)
+                        .and_then(|op| op(self, state))
+                } else {
+                    Err(e)
+                });
+            if let Err(error) = result {
+                self.forth.state.output_stream.writeln(&format!("Error: {:?}", error));
             }
         }
     }    
@@ -80,7 +78,7 @@ impl<'a, 'i, 'o, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, 'i, 'o
 
     fn evaluate(&mut self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
         let debug_state = &mut self.debug_state;
-        let hit_breakpoint = state.instruction_pointer
+        let hit_breakpoint = state.instruction_pointer()
             .and_then(|instruction_pointer| debug_state.breakpoints.iter().find(|addr| **addr == instruction_pointer).map(|addr| *addr));
         if let Some(breakpoint) = hit_breakpoint {
             debug_state.forth.state.output_stream.writeln("");
@@ -92,7 +90,7 @@ impl<'a, 'i, 'o, NK: kernels::Kernel> kernels::Kernel for DebugKernel<'a, 'i, 'o
             debug_state.forth.state.output_stream.writeln("------------------------------------------------------");
             debug_state.forth.state.output_stream.writeln("Stepped");
             self.debug_state.debug(state);
-        } else if let Some(true) = state.current_instruction.map(|current_instruction| current_instruction == DEBUG_OPERATION_XT) {
+        } else if let Some(true) = state.current_instruction().map(|current_instruction| current_instruction == DEBUG_OPERATION_XT) {
             // checking if the current instruction being executed is the DEBUG operation.  hook, and start debugging from there
             debug_state.forth.state.output_stream.writeln("");
             debug_state.forth.state.output_stream.writeln("------------------------------------------------------");

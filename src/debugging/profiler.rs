@@ -72,7 +72,7 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
     fn get_next_kernel(&mut self) -> &mut Self::NextKernel { &mut self.next_kernel }
 
     fn evaluate(&mut self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-        state.current_instruction.map(|current_instruction| {
+        state.current_instruction().map(|current_instruction| {
             self.global_information.record_instruction(current_instruction);
 
             if self.recording && self.profiling_word != None {
@@ -82,7 +82,7 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
                     * if the profiling word was called manually, its return is marked by there being no 
                     * instruction pointer (because its awaiting further instructions) 
                     */
-                    state.instruction_pointer != None
+                    state.instruction_pointer() != None
                 } else {
                     /*
                     * otherwise, if the profiling word was jumped to in the middle of execution, then its
@@ -96,7 +96,7 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
             if let Some(profiling_word) = &mut self.profiling_word {
                 if profiling_word.execution_token == current_instruction && !self.recording {
                     profiling_word.stack_depth = state.return_stack.len();
-                    profiling_word.manually_called = state.instruction_pointer == None;
+                    profiling_word.manually_called = state.instruction_pointer() == None;
                     self.recording = true;
                 }
             }
