@@ -83,6 +83,10 @@ pub fn body(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     Ok(())
 }
 
+pub fn execution_mode_address(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    Ok(state.stack.push(state.internal_state_memory().execution_mode.address))
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         ("IMMEDIATE", false, immedate),
@@ -98,6 +102,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("[']", true, get_execution_token),
         ("(", true, absorb_comment!(')')),
         ("\\", true, absorb_comment!('\n')),
+        ("STATE", false, execution_mode_address),
         // branch generators
         ("_BNE", false, write_branch_false),
         ("_B", false, write_branch),

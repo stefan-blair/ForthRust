@@ -184,8 +184,12 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         ForthIO::new(&mut self.input_stream, self.output_stream.as_mut())
     }
 
-    pub fn get_memory_map(&self) -> memory::MemoryMap {
-        self.memory_map.clone()
+    pub fn memory_map<'x>(&'x self) -> &'x memory::MemoryMap {
+        &self.memory_map
+    }
+
+    pub fn internal_state_memory<'x>(&'x self) -> &'x InternalStateMemory {
+        &self.internal_state_memory
     }
 
     pub fn execution_mode(&self) -> ExecutionMode {
@@ -209,6 +213,12 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn with_operations(mut self, operations: operations::OperationTable) -> Self {
         self.add_operations(operations);
         self
+    }
+
+    pub fn check_address(&self, address: memory::Address) -> ForthResult {
+        let entry = self.memory_map.get(address)?;
+        let getter = entry.getter;
+        getter(self).check_address(address)
     }
 
     pub fn write<T: value::ValueVariant>(&mut self, address: memory::Address, value: T) -> Result<(), Error> {
@@ -301,34 +311,63 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     }
 }
 
-struct StateRegister {
-    address: memory::Address,
+#[derive(Clone, Copy)]
+pub struct StateRegister {
+    pub address: memory::Address,
     read: fn(&ForthState) -> value::Value,
     write: fn(&mut ForthState, value::Value),
 }
 
-struct InternalStateMemory {
-    base: memory::Address,
-    members: Vec<(fn(&ForthState) -> value::Value, fn(&mut ForthState, value::Value))>
+impl StateRegister {
+    fn new(address: memory::Address, read: fn(&ForthState) -> value::Value, write: fn(&mut ForthState, value::Value)) -> Self {
+        Self { address, read, write }
+    }
+}
+
+pub struct InternalStateMemory {
+    pub base: memory::Address,
+    // each state register can be accessed as both a member of the internal state memory, 
+    pub execution_mode: StateRegister,
+    members: Vec<StateRegister>
 }
 
 impl InternalStateMemory {
     fn new(base: usize) -> Self {
-        let members: Vec<(fn(&ForthState) -> value::Value, fn(&mut ForthState, value::Value))> = vec![
-            // execution mode
-            (
-                |state| value::Value::Number(match state.execution_mode {
-                    ExecutionMode::Compile => 1,
-                    ExecutionMode::Interpret => 0
-                }),
-                |state, value| state.execution_mode = match value.to_number() {
-                    0 => ExecutionMode::Interpret,
-                    _ => ExecutionMode::Compile 
-                }
-            )
-        ];
+        // a helper structure for building the internal state memory
+        struct Builder {
+            base: memory::Address,
+            members: Vec<StateRegister>
+        };
 
-        Self { base: memory::Address::from_raw(base), members }
+        impl Builder {
+            fn new(base: usize) -> Self {
+                Self { base: memory::Address::from_raw(base), members: Vec::new() }
+            }
+
+            fn add(&mut self, read: fn(&ForthState) -> value::Value, write: fn(&mut ForthState, value::Value)) -> StateRegister {
+                let new = StateRegister::new(self.base.plus_cell(self.members.len()), read, write);
+                self.members.push(new);
+                new
+            }
+        }
+        
+        let mut builder = Builder::new(base);
+        let execution_mode = builder.add(
+            |state| value::Value::Number(match state.execution_mode {
+                ExecutionMode::Compile => 1,
+                ExecutionMode::Interpret => 0
+            }),
+            |state, value| state.execution_mode = match value.to_number() {
+                0 => ExecutionMode::Interpret,
+                _ => ExecutionMode::Compile 
+            }
+        );
+
+        Self { 
+            base: memory::Address::from_raw(base),
+            execution_mode,
+            members: builder.members
+        }
     }
     
     fn get_base(&self) -> memory::Address {
@@ -354,10 +393,14 @@ impl memory::MemorySegment for ForthState<'_, '_, '_> {
     }
 
     fn write_value(&mut self, address: memory::Address, value: value::Value) -> Result<(), Error> {
-        self.check_address(address).map(|_| self.internal_state_memory.members[address.cell_offset_from(self.get_base())].1(self, value))        
+        self.check_address(address)?;
+        let write_function = self.internal_state_memory.members[address.cell_offset_from(self.get_base())].write;
+        Ok(write_function(self, value))
     }
 
     fn read_value(&self, address: memory::Address) -> Result<value::Value, Error> {
-        self.check_address(address).map(|_| self.internal_state_memory.members[address.cell_offset_from(self.get_base())].0(self))
+        self.check_address(address)?;
+        let read_function = self.internal_state_memory.members[address.cell_offset_from(self.get_base())].read;
+        Ok(read_function(self))
     }
 }
