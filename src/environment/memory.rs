@@ -1,13 +1,15 @@
 use std::mem;
 
-use crate::evaluate::{ForthState, Error};
+use crate::evaluate::{ForthState, Error, ForthResult};
 use super::value::{self, ValueVariant};
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
 use crate::environment::{stack, memory};
 
 
+pub const PAGE_SIZE: usize = 0x1000;
 pub const CELL_SIZE: usize = mem::size_of::<u64>();
+pub const CELLS_PER_PAGE: usize = PAGE_SIZE / CELL_SIZE;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Address(usize);
@@ -41,6 +43,10 @@ impl Address {
         self.0 >= lower.0 && self.0 < upper.0
     }
 
+    pub fn equals(self, other: Address) -> bool {
+        self.0 == other.0
+    }
+
     pub fn offset_from(self, base: Address) -> usize {
         self.0 - base.0
     }
@@ -63,6 +69,14 @@ impl Address {
 
     pub fn increment(&mut self) {
         self.0 += 1;
+    }
+
+    pub fn add(&mut self, n: usize) {
+        self.0 += n;
+    }
+
+    pub fn subtract(&mut self, n: usize) {
+        self.0 -= n;
     }
 
     pub fn plus_cell(self, i: usize) -> Self {
@@ -173,23 +187,45 @@ impl ToString for MemoryPermissions {
     }
 }
 
-type MutableMemorySegmentGetter = for<'a> fn(&'a mut ForthState) -> &'a mut (dyn MemorySegment + 'a);
-type MemorySegmentGetter = for<'a> fn(&'a ForthState) -> &'a (dyn MemorySegment + 'a);
+type MutableSegmentGetter = for<'a> fn(&'a mut ForthState) -> &'a mut (dyn MemorySegment + 'a);
+type SegmentGetter = for<'a> fn(&'a ForthState) -> &'a (dyn MemorySegment + 'a);
+
+#[derive(Clone, Copy)]
+pub enum MappingType {
+    Empty,
+    Named {
+        getter: SegmentGetter, 
+        mutable_getter: MutableSegmentGetter, 
+        name: &'static str
+    },
+    Anonymous {
+        index: usize,
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct MemoryMapping {
     pub base: Address,
     pub permissions: MemoryPermissions,
-    pub mutable_getter: MutableMemorySegmentGetter,
-    pub getter: MemorySegmentGetter,
-    pub label: &'static str,
+    pub mapping_type: MappingType,
 }
 
 impl MemoryMapping {
-    pub fn new(base: Address, permissions: MemoryPermissions, getter: MemorySegmentGetter, mutable_getter: MutableMemorySegmentGetter, label: &'static str) -> Self {
-        Self { base, permissions, mutable_getter, getter, label }
+    fn new(base: Address, permissions: MemoryPermissions, mapping_type: MappingType) -> Self {
+        Self { base, permissions, mapping_type }
     }
 
+    pub fn named(base: Address, permissions: MemoryPermissions, getter: SegmentGetter, mutable_getter: MutableSegmentGetter, name: &'static str) -> Self {
+        Self::new(base, permissions, MappingType::Named { getter, mutable_getter, name })
+    }
+
+    pub fn anonymous(base: Address, permissions: MemoryPermissions, index: usize) -> Self {
+        Self::new(base, permissions, MappingType::Anonymous { index })
+    }
+
+    pub fn empty(base: Address, permissions: MemoryPermissions) -> Self {
+        Self::new(base, permissions, MappingType::Empty)
+    }
 
     pub fn get_offset(&self, address: Address) -> Result<usize, Error> {
         if address.less_than(self.base) {
@@ -201,7 +237,6 @@ impl MemoryMapping {
 }
 
 // contains a vector of memory mappings sorted by start
-#[derive(Clone)]
 pub struct MemoryMap {
     // TODO implement later for speedup, test speedup
     // cache: MemoryMapping, 
@@ -222,7 +257,7 @@ impl MemoryMap {
         self.entries.len()
     }
 
-    pub fn get(&self, address: Address) -> Result<&MemoryMapping, Error> {
+    pub fn get(&self, address: Address) -> Result<MemoryMapping, Error> {
         if address.less_than(self.entries[0].base) {
             return Err(Error::InvalidAddress)
         }
@@ -235,10 +270,17 @@ impl MemoryMap {
             if address.less_than(self.entries[middle].base) {
                 end = middle - 1;
             } else if middle == self.entry_count() - 1 || address.less_than(self.entries[middle + 1].base) {
-                break Ok(&self.entries[middle])
+                break Ok(self.entries[middle])
             } else {
                 start = middle + 1
             }
+        }
+    }
+
+    pub fn add(&mut self, mapping: MemoryMapping) -> ForthResult {
+        match self.entries.binary_search_by_key(&mapping.base.as_raw(), |a| a.base.as_raw()) {
+            Ok(_) => Err(Error::InvalidAddress),
+            Err(i) => Ok(self.entries.insert(i, mapping)),
         }
     }
 }
@@ -246,30 +288,50 @@ impl MemoryMap {
 pub trait MemorySegment {
     fn get_base(&self) -> Address;
     fn get_end(&self) -> Address;
-    fn check_address(&self, address: Address) -> Result<(), Error>;
+    fn check_address(&self, address: Address) -> Result<(), Error> {
+        if address.between(self.get_base(), self.get_end()) {
+            Ok(())
+        } else {
+            Err(Error::InvalidAddress)
+        }
+    }
     fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error>;
     fn read_value(&self, address: Address) -> Result<value::Value, Error>;
 }
 
-pub struct Memory{
+pub struct Memory {
     base: Address,
+    /* 
+    The length may not be the length of the memory.  memory is the underlying
+    representation of the memory, and it is allocated lazily.
+     */
+    length: usize,
     memory: Vec<value::Value>
 }
 
 impl Memory {
     pub fn new(base: usize) -> Self {
-        Self { base: Address::from_raw(base), memory: Vec::new()}
+        Self { base: Address::from_raw(base), length: 0, memory: Vec::new() }
+    }
+
+    pub fn with_num_cells(mut self, num_cells: usize) -> Self {
+        self.length = num_cells;
+        self
     }
 
     pub fn top(&self) -> Address {
-        self.base.plus_cell(self.memory.len())
+        self.base.plus_cell(self.length)
     }
 
     pub fn expand(&mut self, amount: usize) {
-        self.memory.resize(self.memory.len() + amount, 0.value())
+        self.length += amount;
     }
 
     pub fn push_value(&mut self, value: value::Value) {
+        if self.memory.len() < self.length {
+            self.memory.resize(self.length, 0.value());
+        }
+        self.length += 1;
         self.memory.push(value);
     }
     
@@ -279,7 +341,7 @@ impl Memory {
 
     pub fn push_none<T: value::ValueVariant>(&mut self) {
         for _ in 0..T::size() {
-            self.memory.push(0.value());
+            self.push_value(0.value())
         }
     }
 
@@ -297,23 +359,24 @@ impl MemorySegment for Memory {
         self.top()
     }
 
-    fn check_address(&self, address: Address) -> Result<(), Error> {
-        if address.between(self.base, self.top()) {
-            Ok(())
-        } else {
-            Err(Error::InvalidAddress)
-        }
-    }
-
     fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
         self.check_address(address).map(|_| {
-            self.memory[address.cell_offset_from(self.base)] = value
+            let index = address.cell_offset_from(self.base);
+            if index >= self.memory.len() {
+                self.memory.resize(index + 1, 0.value())
+            }
+            self.memory[index] = value
         })
     }
 
     fn read_value(&self, address: Address) -> Result<value::Value, Error> {
         self.check_address(address).map(|_|{
-            self.memory[address.cell_offset_from(self.base)]
+            let index = address.cell_offset_from(self.base);
+            if index >= self.memory.len() {
+                0.value()
+            } else {
+                self.memory[index]
+            }
         })
     }
 }
@@ -353,12 +416,12 @@ impl generic_numbers::StackOperations<generic_numbers::DoubleNumber> for Memory 
 
 #[test]
 fn memory_map_ordering_test() {
-    // let memory_map = MemoryMap::new(vec![
-    //     MemoryMapping::empty(Address::from_raw(128), MemoryPermissions::readonly()),
-    //     MemoryMapping::empty(Address::from_raw(32), MemoryPermissions::readonly().with_write()),
-    //     MemoryMapping::empty(Address::from_raw(1024), MemoryPermissions::readonly().with_execute())
-    // ]);
+    let memory_map = MemoryMap::new(vec![
+        MemoryMapping::empty(Address::from_raw(128), MemoryPermissions::readonly()),
+        MemoryMapping::empty(Address::from_raw(32), MemoryPermissions::readonly().with_write()),
+        MemoryMapping::empty(Address::from_raw(1024), MemoryPermissions::readonly().with_execute())
+    ]);
 
-    // assert!(memory_map.get(Address::from_raw(50)).is_ok());
-    // assert_eq!(memory_map.get(Address::from_raw(130)).unwrap().base, Address::from_raw(128));
+    assert!(memory_map.get(Address::from_raw(50)).is_ok());
+    assert_eq!(memory_map.get(Address::from_raw(130)).unwrap().base, Address::from_raw(128));
 }

@@ -12,7 +12,7 @@ pub fn print_newline(state: &mut evaluate::ForthState) -> evaluate::ForthResult 
 }
 
 pub fn print_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    state.heap.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+    state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
         // there must be an instruction pointer if its literally executing this
         let mut string_address = state.instruction_pointer().unwrap();
         let length: generic_numbers::UnsignedByte = state.read(string_address)?;

@@ -61,14 +61,6 @@ impl MemorySegment for Stack {
         self.base.plus_cell(self.stack.len())
     }
 
-    fn check_address(&self, address: Address) -> Result<(), Error> {
-        if address.between(self.base, self.base.plus_cell(self.stack.len())) {
-            Ok(())
-        } else {
-            Err(Error::InvalidAddress)
-        }
-    }
-
     fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
         self.check_address(address).map(|_| {
             self.stack[address.cell_offset_from(self.base)] = value

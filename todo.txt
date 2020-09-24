@@ -1,9 +1,14 @@
 
 implementation:
-
-    memory -> heap, make addresses / reading / writing happen in ForthState
-        add multiple memory segments, heap thing, string storage
     
+    do hash map instead of binary tree in the memory map.  hashing ranges could maybe be:
+        start           - end => 
+        0x7fabcdef1000  - 0x7fabcdef2000 =>
+        left shift off the different bits of the range =>
+        thats bad tho cause some out of range addresses would still map there, maybe figure out some solution
+    add threads
+    handle page faults, so that if memory access to beyond self->end() may just map more memory in.          
+
     track lengths of functions in cells
     traits can have const values.  can use this to hardcode settings in a forth machine, for example, the ideal inline length
 
@@ -16,8 +21,8 @@ debugger:
     Check if starts with H and then add the format in
 
 
-noteable abscent words:
+notable absent words:
 
     EVALUATE: literally evaluate a string on the stack
-    COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just pusts the execution token.  but if its something like `+`, it literally compiles the code into it
+    COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just puts the execution token.  but if its something like `+`, it literally compiles the code into it
     STATE:    returns address of state, which contains a 1 if in compilation state, and 0 if in interpret state

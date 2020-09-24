@@ -9,7 +9,7 @@ pub fn get_char(state: &mut ForthState) -> ForthResult {
 }
 
 pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthResult {
-    let length_address = state.heap.top();
+    let length_address = state.data_space.top();
     let mut string_address = length_address.plus(1);
     let mut length: generic_numbers::UnsignedByte = 0;
     loop {
@@ -17,8 +17,8 @@ pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthRe
         if next_char == delimiter {
             break;
         } else {
-            if !string_address.less_than(state.heap.top()) {
-                state.heap.push_none::<value::Value>();
+            if !string_address.less_than(state.data_space.top()) {
+                state.data_space.push_none::<value::Value>();
             }
             state.write(string_address, next_char as generic_numbers::UnsignedByte)?;
             string_address.increment();
@@ -32,7 +32,7 @@ pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthRe
 
 pub fn get_word(state: &mut ForthState) -> ForthResult {
     let delimiter = state.stack.pop::<generic_numbers::UnsignedByte>()? as char;
-    let address = state.heap.top();
+    let address = state.data_space.top();
     read_string_to_memory(state, delimiter).map(|_| state.stack.push(address))
 }
 

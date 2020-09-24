@@ -137,22 +137,29 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, address: memory::
  * Debug operations.
  */
 pub(in super) fn view_memory_region(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let label = debugger_state.forth.state.input_stream.next_word()?;
+    let name = debugger_state.forth.state.input_stream.next_word()?;
     for mapping in debug_target.memory_map().get_entries().iter() {
-        if label == mapping.label.to_uppercase() {
-            let io = debugger_state.forth.state.get_forth_io();
-            io.output_stream.writeln(&format!("{}:", label.to_lowercase()));
-            return Ok(print_memory_formatted(debug_target, mapping.base, None, io));
+        if let memory::MappingType::Named { name: mapping_name, .. } = mapping.mapping_type {
+            if name == mapping_name.to_uppercase() {
+                let io = debugger_state.forth.state.get_forth_io();
+                io.output_stream.writeln(&format!("{}:", name.to_lowercase()));
+                return Ok(print_memory_formatted(debug_target, mapping.base, None, io));    
+            }
         }
     }
 
-    Err(evaluate::Error::UnknownWord(label))
+    Err(evaluate::Error::UnknownWord(name))
 }
 
 pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
     debugger_state.forth.state.output_stream.writeln("memory mapping:");
     for mapping in debug_target.memory_map().get_entries().iter() {
-        debugger_state.forth.state.output_stream.writeln(&format!("{}   {}  | {}", stringify_address(mapping.base), mapping.permissions.to_string(), mapping.label));
+        let name = match mapping.mapping_type {
+            memory::MappingType::Anonymous { .. } => "",
+            memory::MappingType::Empty => "empty",
+            memory::MappingType::Named { name, ..} => name
+        };
+        debugger_state.forth.state.output_stream.writeln(&format!("{}   {}  | {}", stringify_address(mapping.base), mapping.permissions.to_string(), name));
     }
 
     Ok(())

@@ -14,7 +14,7 @@ pub fn memory_write<N: value::ValueVariant>(state: &mut evaluate::ForthState) ->
 }
 
 pub fn pop_write(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    state.heap.push(state.stack.pop::<value::Value>()?);
+    state.data_space.push(state.stack.pop::<value::Value>()?);
     Ok(())
 }
 

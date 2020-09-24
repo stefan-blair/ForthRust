@@ -4,21 +4,21 @@ use crate::postpone;
 use evaluate::definition;
 
 
-pub fn here(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.stack.push(state.heap.top().to_number()); Ok(()) }
+pub fn here(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.stack.push(state.data_space.top().to_number()); Ok(()) }
 
 pub fn allot(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
     let total_memory = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
     let cells = (total_memory + memory::CELL_SIZE - 1) / memory::CELL_SIZE;
-    state.heap.expand(cells as usize); 
+    state.data_space.expand(cells as usize); 
     Ok(()) 
 }
 
 pub fn create(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
-    let address = state.heap.top().plus_cell(3);
-    let xt = definition::ExecutionToken::Definition(state.heap.top());
-    state.heap.push(definition::ExecutionToken::Number(address.to_number()));
+    let address = state.data_space.top().plus_cell(3);
+    let xt = definition::ExecutionToken::Definition(state.data_space.top());
+    state.data_space.push(definition::ExecutionToken::Number(address.to_number()));
     postpone!(state, super::control_flow_operations::control_flow_break);
     postpone!(state, super::control_flow_operations::control_flow_break);
     state.definitions.add(word, definition::Definition::new(xt, false));
@@ -27,19 +27,19 @@ pub fn create(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 }
 
 pub fn variable<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    create(state).and_then(|_| Ok(state.heap.push_none::<N>()))
+    create(state).and_then(|_| Ok(state.data_space.push_none::<N>()))
 }
 
 pub fn constant<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
-    let address = state.heap.top();
-    state.heap.push(definition::ExecutionToken::LeafOperation(|state| {
+    let address = state.data_space.top();
+    state.data_space.push(definition::ExecutionToken::LeafOperation(|state| {
         let value: N = state.read(state.instruction_pointer().unwrap())?;
         state.stack.push(value);
         state.return_from()
     }));
-    state.heap.push(state.stack.pop::<N>()?);
+    state.data_space.push(state.stack.pop::<N>()?);
     let xt = definition::ExecutionToken::Definition(address);
     state.definitions.add(word, definition::Definition::new(xt, false));
 
@@ -73,7 +73,7 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let nametag = state.definitions.get_nametag(&word)?;
 
     instruction_compiler::InstructionCompiler::with_state(state).push(nametag.to_number())?;
-    state.heap.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+    state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
         let nametag = evaluate::definition::NameTag::from(state.stack.pop()?);
         let number = state.stack.pop::<generic_numbers::Number>()?;
         state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
@@ -89,6 +89,13 @@ pub fn cells(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     Ok(())
 }
 
+pub fn map_anonymous(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let num_pages = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+    let address = state.create_anonymous_mapping(num_pages)?;
+    state.stack.push(address);
+    Ok(())
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         ("HERE", false, here),
@@ -98,6 +105,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("VALUE", false, value),
         ("CELLS", false, cells),
         ("TO", true, to),
+        ("MAP", false, map_anonymous), 
 
         ("VARIABLE" , false, variable::<value::Value>),
         ("CONSTANT", false, constant::<value::Value>),
