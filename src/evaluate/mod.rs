@@ -2,7 +2,7 @@ pub mod definition;
 pub mod kernels;
 
 use crate::operations;
-use crate::environment::{memory::{self, MemorySegment}, stack, value::{self, ValueVariant}};
+use crate::environment::{memory::{self, MemorySegment}, stack, heap, value::{self, ValueVariant}};
 use crate::io::{tokens, output_stream};
 use crate::compiled_instructions;
 
@@ -57,17 +57,27 @@ pub struct Forth<'a, 'i, 'o, KERNEL: kernels::Kernel> {
     pub kernel: KERNEL
 }
 
+/**
+ * Provides a default method to construct the Forth object
+ * using the default constructor.
+ */
+impl Forth<'_, '_, '_, kernels::DefaultKernel> {
+    pub fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a, 'i, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'o, KERNEL> {
     pub fn new() -> Self {
         let mut state = ForthState::new();
         let kernel = KERNEL::new(&mut state);
-        let mut forth_machine = Self { state, kernel };
+        let mut forth = Self { state, kernel };
 
         for definition in operations::UNCOMPILED_OPERATIONS.iter() {
-            forth_machine.evaluate_string(definition).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
+            forth.evaluate_string(definition).unwrap_or_else(|error| panic!("Failed to parse preset definition: {:?} {:?}", definition, error));
         }
 
-        forth_machine
+        forth
     }
 
     pub fn set_output_stream<O: output_stream::OutputStream + 'o> (&mut self, output: O) {
@@ -127,9 +137,6 @@ impl<'a, 'i, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'o, KERNEL> {
  * This struct contains the state required to execute / emulate the code
  */
 pub struct ForthState<'a, 'i, 'o> {
-    pub definitions: definition::DefinitionSet,
-    pub compiled_instructions: compiled_instructions::CompiledInstructions<'a>,
-
     pub output_stream: Box<dyn output_stream::OutputStream + 'o>,
     pub input_stream: tokens::TokenStream<'i>,
 
@@ -146,12 +153,15 @@ pub struct ForthState<'a, 'i, 'o> {
     pub stack: stack::Stack,
     pub data_space: memory::Memory,
     pub pad: memory::Memory,
+    pub heap: heap::Heap,
 
     execution_mode: ExecutionMode,
     // pointer to the next instruction to execute
     instruction_pointer: Option<memory::Address>,
     // contains the current instruction, if any, being executed
     current_instruction: Option<definition::ExecutionToken>,
+    pub definitions: definition::DefinitionSet,
+    pub compiled_instructions: compiled_instructions::CompiledInstructions<'a>,
 }
 
 impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
@@ -161,6 +171,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         let stack = stack::Stack::new(0x7aceddead000);
         let data_space = memory::Memory::new(0x7feaddead000);
         let pad = memory::Memory::new(0x76beaded5000);
+        let heap = heap::Heap::new(0x44ea5c69c000);
 
         let internal_state_memory = InternalStateMemory::new(0x5deadbeef000);
 
@@ -169,6 +180,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
             memory::MemoryMapping::named(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack, "stack"),
             memory::MemoryMapping::named(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack, "return stack"),
             memory::MemoryMapping::named(pad.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.pad, |state| &mut state.pad, "pad"),
+            memory::MemoryMapping::named(heap.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.heap, |state| &mut state.heap, "heap"),
             memory::MemoryMapping::named(internal_state_memory.get_base(), memory::MemoryPermissions::readonly(), |state| state, |state| state, "[internal mappings]"),
         ]);
 
@@ -176,7 +188,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
             compiled_instructions: compiled_instructions::CompiledInstructions::new(),
             definitions: definition::DefinitionSet::new(),
 
-            data_space, stack, return_stack, pad,  memory_map, internal_state_memory, 
+            data_space, stack, return_stack, pad, heap, memory_map, internal_state_memory, 
             anonymous_pages: Vec::new(),
             next_anonymous_mapping: memory::Address::from_raw(0x55bedead1000),
 

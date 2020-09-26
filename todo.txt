@@ -1,6 +1,8 @@
 
 implementation:
     
+    united numbers, for example, 8 CELLS != 8 BYTES, compound types CELLS per PAGE * x PAGES = n CELLS or somethings
+
     do hash map instead of binary tree in the memory map.  hashing ranges could maybe be:
         start           - end => 
         0x7fabcdef1000  - 0x7fabcdef2000 =>
