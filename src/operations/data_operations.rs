@@ -96,6 +96,49 @@ pub fn map_anonymous(state: &mut evaluate::ForthState) -> evaluate::ForthResult 
     Ok(())
 }
 
+pub fn allocate(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let size = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+    match state.heap.allocate(size) {
+        Ok(address) => {
+            state.stack.push(address);
+            state.stack.push(0 as generic_numbers::Number);
+        },
+        Err(_) => {
+            state.stack.push(0 as generic_numbers::Number);
+            state.stack.push(-1 as generic_numbers::Number);
+        }
+    }
+
+    Ok(())
+}
+
+pub fn free(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let address: memory::Address = state.stack.pop()?;
+    match state.heap.free(address) {
+        Ok(_) => state.stack.push(0 as generic_numbers::Number),
+        Err(_) => state.stack.push(-1 as generic_numbers::Number),
+    }
+
+    Ok(())
+}
+
+pub fn resize(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    let new_size = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+    let address: memory::Address = state.stack.pop()?;
+    match state.heap.resize(address, new_size) {
+        Ok(new_address) => {
+            state.stack.push(new_address);
+            state.stack.push(0 as generic_numbers::Number);
+        },
+        Err(_) => {
+            state.stack.push(0 as generic_numbers::Number);
+            state.stack.push(-1 as generic_numbers::Number);
+        }
+    }
+
+    Ok(())
+}
+
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     vec![
         ("HERE", false, here),
@@ -106,6 +149,11 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("CELLS", false, cells),
         ("TO", true, to),
         ("MAP", false, map_anonymous), 
+
+        // heap instructions
+        ("ALLOCATE", false, allocate),
+        ("FREE", false, free),
+        ("RESIZE", false, resize),        
 
         ("VARIABLE" , false, variable::<value::Value>),
         ("CONSTANT", false, constant::<value::Value>),
