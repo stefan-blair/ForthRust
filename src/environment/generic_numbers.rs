@@ -5,9 +5,7 @@ use std::fmt;
 use std::mem;
 
 use crate::evaluate::Error;
-use super::memory;
-use super::stack;
-use super::value;
+use super::{memory, stack, value, units::Cells};
 
 /**
  * Interface for stack and memory to implement for each generic number type.
@@ -198,7 +196,7 @@ impl MemoryOperations for Number {
 impl MemoryOperations for DoubleNumber {
     fn read_number(memory_segment: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
         let a = memory_segment.read_value(address)?;
-        let b = memory_segment.read_value(address.plus_cell(1))?;
+        let b = memory_segment.read_value(address.plus_cell(Cells::one()))?;
         Ok(DoubleNumber::from_chunks(&[a.to_number(), b.to_number()]))
     }
 

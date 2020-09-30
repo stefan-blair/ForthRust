@@ -3,3 +3,4 @@ pub mod value;
 pub mod stack;
 pub mod memory;
 pub mod heap;
+pub mod units;

@@ -29,16 +29,15 @@ pub fn print_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 
     }).value());
 
-    // TODO: THERE SEEMS TO BE A BUG HERE where it pushes 32 onto the stack somewhere for some reason ....
     string_operations::read_string_to_memory(state, '"')
 }
 
 pub fn type_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let count: Bytes = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
-    for i in 0..count {
-        let c: generic_numbers::UnsignedByte = state.read(address.plus(i as usize))?;
+    for i in (0..count.get_bytes()).map(|i| Bytes::from(i)) {
+        let c: generic_numbers::UnsignedByte = state.read(address.plus(i))?;
         state.output_stream.write(&format!("{}", c as char));
     }
 

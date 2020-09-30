@@ -7,16 +7,14 @@ use evaluate::definition;
 pub fn here(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.stack.push(state.data_space.top().to_number()); Ok(()) }
 
 pub fn allot(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
-    let total_memory = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
-    let cells = (total_memory + memory::CELL_SIZE - 1) / memory::CELL_SIZE;
-    state.data_space.expand(cells as usize); 
+    state.data_space.expand(state.stack.pop::<Bytes>()?.to_cells()); 
     Ok(()) 
 }
 
 pub fn create(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
-    let address = state.data_space.top().plus_cell(3);
+    let address = state.data_space.top().plus_cell(Cells::cells(3));
     let xt = definition::ExecutionToken::Definition(state.data_space.top());
     state.data_space.push(definition::ExecutionToken::Number(address.to_number()));
     postpone!(state, super::control_flow_operations::control_flow_break);
@@ -53,7 +51,7 @@ pub fn does(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
         return Ok(())
     };
 
-    state.write(object_address.plus_cell(1), definition::ExecutionToken::Definition(state.instruction_pointer().unwrap()))?;
+    state.write(object_address.plus_cell(Cells::one()), definition::ExecutionToken::Definition(state.instruction_pointer().unwrap()))?;
 
     // add a manual break, so that normal calls to the function wont execute the rest of the code, only created objects
     state.return_from()
@@ -97,8 +95,7 @@ pub fn map_anonymous(state: &mut evaluate::ForthState) -> evaluate::ForthResult 
 }
 
 pub fn allocate(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let size = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
-    match state.heap.allocate(size) {
+    match state.heap.allocate(state.stack.pop::<Bytes>()?) {
         Ok(address) => {
             state.stack.push(address);
             state.stack.push(0 as generic_numbers::Number);
@@ -123,7 +120,7 @@ pub fn free(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 }
 
 pub fn resize(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let new_size = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+    let new_size = state.stack.pop::<Bytes>()?;
     let address: memory::Address = state.stack.pop()?;
     match state.heap.resize(address, new_size) {
         Ok(new_address) => {

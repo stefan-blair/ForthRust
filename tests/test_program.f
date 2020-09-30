@@ -28,7 +28,7 @@ VARIABLE ID
    " wet sand"         118        900  MATERIAL WET-SAND
    " clay"             120        727  MATERIAL CLAY
 
-cement 10 foot pile drop drop
+cement 10 foot pile 
 10 foot 3 inch pile
 dry-sand
 10 foot pile

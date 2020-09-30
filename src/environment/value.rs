@@ -1,6 +1,7 @@
 use super::stack;
 use super::memory;
 use super::generic_numbers;
+use super::units::{Cells};
 use crate::evaluate::{self, Error};
 
 
@@ -79,16 +80,16 @@ impl ValueVariant for DoubleValue {
     }
 
     fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
-        memory.check_address(address).and(memory.check_address(address.plus_cell(1))).and_then(|_| {
+        memory.check_address(address).and(memory.check_address(address.plus_cell(Cells::one()))).and_then(|_| {
             memory.write_value(address, self.0)?;
-            memory.write_value(address.plus_cell(1), self.1)?;
+            memory.write_value(address.plus_cell(Cells::one()), self.1)?;
             Ok(())
         })
     }
 
     fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
         let a = memory.read_value(address)?;
-        let b = memory.read_value(address.plus_cell(1))?;
+        let b = memory.read_value(address.plus_cell(Cells::one()))?;
         Ok(DoubleValue(a, b))
     }
 

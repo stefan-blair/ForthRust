@@ -1,5 +1,5 @@
 use crate::evaluate;
-use crate::environment::{memory::{self, MemorySegment}, generic_numbers, value};
+use crate::environment::{memory::{self, MemorySegment}, generic_numbers, value, units::{Bytes, Cells}};
 use super::debugger;
 use crate::operations;
 
@@ -70,7 +70,7 @@ fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String,
     debug_target.definitions.debug_only_get_nametag_map().iter()
         .map(|(word, nametag)| (word, debug_target.definitions.get(*nametag).execution_token))
         .filter_map(|(word, execution_token)| match execution_token { 
-            evaluate::definition::ExecutionToken::Number(addr) => Some((word, memory::Address::debug_only_from_offset(addr as usize))),
+            evaluate::definition::ExecutionToken::Number(addr) => Some((word, memory::Address::from_raw(Bytes::from(addr)))),
             _ => None
         }).collect::<Vec<_>>()
 }
@@ -107,8 +107,8 @@ fn print_address(debug_target: &evaluate::ForthState, address: memory::Address) 
 
 fn print_value_helper(debug_target: &evaluate::ForthState, value: value::Value, depth: usize, max: usize) -> String {
     match value {
-        value::Value::Number(number) => if let Ok(value) = debug_target.read::<value::Value>(memory::Address::from_raw(number as usize)) {
-            let address = memory::Address::from_raw(number as usize);
+        value::Value::Number(number) => if let Ok(value) = debug_target.read::<value::Value>(memory::Address::from_raw(Bytes::from(number))) {
+            let address = memory::Address::from_raw(Bytes::from(number));
             if depth <= max {
                 format!("{} -> {}", stringify_address(address), print_value_helper(debug_target, value, depth + 1, max))
             } else {
@@ -166,8 +166,9 @@ pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debu
 }
 
 pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let address = debugger_state.forth.state.stack.pop()?;
+    let address: memory::Address = debugger_state.forth.state.stack.pop()?;
     let format = debugger_state.forth.state.input_stream.next_word()?;
+    println!("reading from {}", address.to_string());
     debugger_state.forth.state.output_stream.writeln(&read_from_address(debug_target, address, &format[..])?);
 
     Ok(())
@@ -205,12 +206,12 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
     debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     if let Some(instruction_pointer) = debug_target.instruction_pointer() {
         debugger_state.forth.state.output_stream.writeln("memory:\n");
-        let start = if debug_target.read::<value::Value>(instruction_pointer.minus_cell(3)).is_ok() {
-            instruction_pointer.minus_cell(3)
+        let start = if debug_target.read::<value::Value>(instruction_pointer.minus_cell(Cells::cells(3))).is_ok() {
+            instruction_pointer.minus_cell(Cells::cells(3))
         } else {
             instruction_pointer
         };
-        print_memory_formatted(debug_target, start, Some(instruction_pointer.plus_cell(4)), debugger_state.forth.state.get_forth_io());
+        print_memory_formatted(debug_target, start, Some(instruction_pointer.plus_cell(Cells::cells(4))), debugger_state.forth.state.get_forth_io());
         debugger_state.forth.state.output_stream.writeln("------------------------------------------------------");
     }
 

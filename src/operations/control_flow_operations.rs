@@ -45,7 +45,7 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthState) -> evaluate::Fort
     
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.write(loop_address.minus_cell(3), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
+    state.write(loop_address.minus_cell(Cells::cells(3)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn loop_compiletime(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
@@ -68,7 +68,7 @@ pub fn until_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     instruction_compiler::InstructionCompiler::with_state(state).branch_false(loop_address)?;
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
+    state.write(loop_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn again_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
@@ -76,7 +76,7 @@ pub fn again_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     instruction_compiler::InstructionCompiler::with_state(state).branch(loop_address)?;
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.write(loop_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
+    state.write(loop_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn while_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
@@ -97,7 +97,7 @@ pub fn repeat_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     instruction_compiler::InstructionCompiler::with_state(state).with_address(branch_address).branch_false(loop_middle_address)?;
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
-    state.write(loop_start_address.minus_cell(2), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
+    state.write(loop_start_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn leave(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
@@ -117,8 +117,8 @@ pub fn evaluate_string(state: &mut evaluate::ForthState) -> evaluate::ForthResul
 
     // read the characters into a vector
     let mut copied_string = Vec::new();
-    for i in 0..length {
-        copied_string.push(state.read::<generic_numbers::UnsignedByte>(address.plus(i as usize))? as char);
+    for i in (0..length).map(|i| Bytes::from(i)) {
+        copied_string.push(state.read::<generic_numbers::UnsignedByte>(address.plus(i))? as char);
     }
     // convert that vector into an into_iter, which takes ownership of it, and prepend it to the current input stream
     state.input_stream.prepend_stream(copied_string.into_iter());

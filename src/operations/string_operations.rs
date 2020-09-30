@@ -10,7 +10,7 @@ pub fn get_char(state: &mut ForthState) -> ForthResult {
 
 pub fn read_string_to_memory(state: &mut ForthState, delimiter: char) -> ForthResult {
     let length_address = state.data_space.top();
-    let mut string_address = length_address.plus(1);
+    let mut string_address = length_address.plus(Bytes::one());
     let mut length: generic_numbers::UnsignedByte = 0;
     loop {
         let next_char = state.input_stream.next_char()?;
@@ -40,11 +40,11 @@ pub fn trailing(state: &mut ForthState) -> ForthResult {
     let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
-    let mut new_count = 0;
-    for i in 0..count {
-        let current_char = state.read::<generic_numbers::UnsignedByte>(address.plus(i as usize))? as char;
+    let mut new_count = Bytes::zero();
+    for i in (0..count).map(|i| Bytes::from(i)) {
+        let current_char = state.read::<generic_numbers::UnsignedByte>(address.plus(i))? as char;
         if current_char.is_ascii() && !current_char.is_whitespace() {
-            new_count = i + 1;
+            new_count = i + Bytes::one();
         }
     }
 
@@ -59,9 +59,9 @@ pub fn cmove(state: &mut ForthState) -> ForthResult {
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
 
-    for i in 0..count {
-        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as usize))?;
-        state.write(destination.plus(i as usize), current_byte)?;
+    for i in (0..count).map(|i| Bytes::from(i)) {
+        let current_byte = state.read::<Bytes>(source.plus(i))?;
+        state.write(destination.plus(i), current_byte)?;
     }
 
     Ok(())
@@ -72,9 +72,9 @@ pub fn cmove_backwards(state: &mut ForthState) -> ForthResult {
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
 
-    for i in (count - 1)..0 {
-        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i as usize))?;
-        state.write(destination.plus(i as usize), current_byte)?;
+    for i in ((count - 1)..0).map(|i| Bytes::from(i)) {
+        let current_byte = state.read::<generic_numbers::UnsignedByte>(source.plus(i))?;
+        state.write(destination.plus(i), current_byte)?;
     }
 
     Ok(())
@@ -86,22 +86,22 @@ pub fn move_noclobber(state: &mut ForthState) -> ForthResult {
     let source: memory::Address = state.stack.pop()?;
     
     let mut bytes = Vec::new();
-    for i in 0..count {
-        bytes.push(state.read::<generic_numbers::UnsignedByte>(source.plus(i as usize))?);
+    for i in (0..count).map(|i| Bytes::from(i)) {
+        bytes.push(state.read::<generic_numbers::UnsignedByte>(source.plus(i))?);
     }
 
     for (i, byte) in bytes.into_iter().enumerate() {
-        state.write(destination.plus(i as usize), byte)?;
+        state.write(destination.plus(Bytes::from(i)), byte)?;
     }
 
     Ok(())
 }
 
 pub fn accept(state: &mut ForthState) -> ForthResult {
-    let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let count: Bytes = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
-    let mut copied_characters = 0;
+    let mut copied_characters = Bytes::zero();
     while copied_characters < count {
         let current_char = state.input_stream.next_char()?;
         
@@ -109,8 +109,8 @@ pub fn accept(state: &mut ForthState) -> ForthResult {
             break;
         }
 
-        state.write(address.plus(copied_characters as usize), current_char as generic_numbers::UnsignedByte)?;
-        copied_characters += 1;
+        state.write(address.plus(copied_characters), current_char as generic_numbers::UnsignedByte)?;
+        copied_characters += Bytes::one();
     }
 
     Ok(())
@@ -120,7 +120,7 @@ pub fn count(state: &mut ForthState) -> ForthResult {
     let address: memory::Address = state.stack.pop()?;
     
     let length = state.read::<generic_numbers::UnsignedByte>(address)?;
-    state.stack.push(address.plus(1));
+    state.stack.push(address.plus(Bytes::one()));
     state.stack.push(length);
 
     Ok(())

@@ -1,8 +1,8 @@
 use crate::evaluate::Error;
 use super::value;
-use super::generic_numbers;
-use super::generic_numbers::{ConvertOperations, AsValue};
+use super::generic_numbers::{self, ConvertOperations, AsValue};
 use super::memory::{Address, MemorySegment};
+use super::units::{Bytes, Cells};
 
 
 // contains stack in the vec, and offset contains the current base pointer (not used in data stack)
@@ -13,7 +13,7 @@ pub struct Stack {
 
 impl Stack {
     pub fn new(base: usize) -> Self {
-        Self { base: Address::from_raw(base), stack: Vec::new() }
+        Self { base: Address::from_raw(Bytes::bytes(base)), stack: Vec::new() }
     }
 
     pub(super) fn push_value(&mut self, value: value::Value) {
@@ -39,8 +39,8 @@ impl Stack {
         })
     }
 
-    pub fn len(&self) -> usize {
-        self.stack.len()
+    pub fn len(&self) -> Cells {
+        Cells::cells(self.stack.len())
     }
 
     pub fn to_vec(&self) -> Vec<value::Value> {
@@ -58,18 +58,18 @@ impl MemorySegment for Stack {
     }
 
     fn get_end(&self) -> Address {
-        self.base.plus_cell(self.stack.len())
+        self.base.plus_cell(self.len())
     }
 
     fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
         self.check_address(address).map(|_| {
-            self.stack[address.cell_offset_from(self.base)] = value
+            self.stack[address.offset_from(self.base).to_cells().get_cells()] = value
         })
     }
 
     fn read_value(&self, address: Address) -> Result<value::Value, Error> {
         self.check_address(address).map(|_|{
-            self.stack[address.cell_offset_from(self.base)]
+            self.stack[address.offset_from(self.base).to_cells().get_cells()]
         })
     }
 }

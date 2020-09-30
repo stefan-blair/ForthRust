@@ -2,7 +2,7 @@ pub mod definition;
 pub mod kernels;
 
 use crate::operations;
-use crate::environment::{memory::{self, MemorySegment}, stack, heap, value::{self, ValueVariant}};
+use crate::environment::{memory::{self, MemorySegment}, stack, heap, value::{self, ValueVariant}, units::{Bytes, Cells, Pages}};
 use crate::io::{tokens, output_stream};
 use crate::compiled_instructions;
 
@@ -190,7 +190,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
             data_space, stack, return_stack, pad, heap, memory_map, internal_state_memory, 
             anonymous_pages: Vec::new(),
-            next_anonymous_mapping: memory::Address::from_raw(0x55bedead1000),
+            next_anonymous_mapping: memory::Address::from_raw(Bytes::bytes(0x55bedead1000)),
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
@@ -288,7 +288,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
     pub fn create_anonymous_mapping(&mut self, num_pages: usize) -> Result<memory::Address, Error> {
         let base = self.next_anonymous_mapping;
-        self.next_anonymous_mapping.add(memory::PAGE_SIZE * num_pages);
+        self.next_anonymous_mapping.add(Pages::one().to_bytes() * num_pages);
 
         self.create_anonymous_mapping_at(base, num_pages)
     }
@@ -296,7 +296,9 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     pub fn create_anonymous_mapping_at(&mut self, address: memory::Address, num_pages: usize) -> Result<memory::Address, Error> {
         let index = self.anonymous_pages.len();
 
-        self.anonymous_pages.push(memory::Memory::new(address.as_raw()).with_num_cells(memory::CELLS_PER_PAGE * num_pages));
+        self.anonymous_pages
+            .push(memory::Memory::new(address.as_raw())
+            .with_num_cells(Pages::one().to_cells() * num_pages));
         self.memory_map.add(memory::MemoryMapping::anonymous(address, memory::MemoryPermissions::readwrite(), index))
             .map(|_| address)
     }
@@ -353,7 +355,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
     fn execute_current_instruction(&mut self) -> ForthResult {
         // execute the current instruction, 'take'ing it so its None, and incrementing the current instruction pointer to the next position for the next iteration 
-        self.instruction_pointer = self.instruction_pointer.map(|ip| ip.plus_cell(1));
+        self.instruction_pointer = self.instruction_pointer.map(|ip| ip.plus_cell(Cells::one()));
         match self.current_instruction.take() {
             Some(xt) => self.execute(xt),
             None => Ok(())
@@ -391,11 +393,11 @@ impl InternalStateMemory {
 
         impl Builder {
             fn new(base: usize) -> Self {
-                Self { base: memory::Address::from_raw(base), members: Vec::new() }
+                Self { base: memory::Address::from_raw(Bytes::bytes(base)), members: Vec::new() }
             }
 
             fn add(&mut self, read: fn(&ForthState) -> value::Value, write: fn(&mut ForthState, value::Value)) -> StateRegister {
-                let new = StateRegister::new(self.base.plus_cell(self.members.len()), read, write);
+                let new = StateRegister::new(self.base.plus_cell(Cells::cells(self.members.len())), read, write);
                 self.members.push(new);
                 new
             }
@@ -414,10 +416,14 @@ impl InternalStateMemory {
         );
 
         Self { 
-            base: memory::Address::from_raw(base),
+            base: memory::Address::from_raw(Bytes::bytes(base)),
             execution_mode,
             members: builder.members
         }
+    }
+
+    fn len(&self) -> Cells {
+         Cells::cells(self.members.len())
     }
     
     fn get_base(&self) -> memory::Address {
@@ -431,18 +437,20 @@ impl memory::MemorySegment for ForthState<'_, '_, '_> {
     }
 
     fn get_end(&self) -> memory::Address {
-        self.internal_state_memory.base.plus_cell(self.internal_state_memory.members.len())
+        self.internal_state_memory.base.plus_cell(self.internal_state_memory.len())
     }
 
     fn write_value(&mut self, address: memory::Address, value: value::Value) -> Result<(), Error> {
         self.check_address(address)?;
-        let write_function = self.internal_state_memory.members[address.cell_offset_from(self.get_base())].write;
+        let index = address.offset_from(self.get_base()).to_cells().get_cells();
+        let write_function = self.internal_state_memory.members[index].write;
         Ok(write_function(self, value))
     }
 
     fn read_value(&self, address: memory::Address) -> Result<value::Value, Error> {
         self.check_address(address)?;
-        let read_function = self.internal_state_memory.members[address.cell_offset_from(self.get_base())].read;
+        let index = address.offset_from(self.get_base()).to_cells().get_cells();
+        let read_function = self.internal_state_memory.members[index].read;
         Ok(read_function(self))
     }
 }

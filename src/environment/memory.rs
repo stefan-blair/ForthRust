@@ -4,7 +4,7 @@ use crate::evaluate::{ForthState, Error, ForthResult};
 use super::value::{self, ValueVariant};
 use super::generic_numbers;
 use super::generic_numbers::{ConvertOperations, AsValue};
-use crate::environment::{stack, memory};
+use crate::environment::{stack, memory, units::{Bytes, Cells}};
 
 
 pub const PAGE_SIZE: usize = 0x1000;
@@ -12,27 +12,19 @@ pub const CELL_SIZE: usize = mem::size_of::<u64>();
 pub const CELLS_PER_PAGE: usize = PAGE_SIZE / CELL_SIZE;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Address(usize);
+pub struct Address(Bytes);
 
 impl Address {
-    pub fn from_raw(raw: usize) -> Self {
+    pub fn from_raw(raw: Bytes) -> Self {
         Self(raw)
     }
 
-    pub fn debug_only_from_offset(offset: usize) -> Self {
-        Self(offset)
+    pub fn get(self) -> Bytes {
+        self.0
     }
-
-    pub fn debug_only_from_cell(offset: usize) -> Self {
-        Self(offset * CELL_SIZE)
-    }
-
-    pub fn get_cell(self) -> usize {
-        self.0 / CELL_SIZE
-    }
-
+    
     pub fn get_cell_byte(self) -> usize {
-        self.0 % CELL_SIZE
+        self.0.get_bytes() % CELL_SIZE
     }
 
     pub fn less_than(self, other: Address) -> bool {
@@ -47,56 +39,51 @@ impl Address {
         self.0 == other.0
     }
 
-    pub fn offset_from(self, base: Address) -> usize {
+    pub fn offset_from(self, base: Address) -> Bytes {
         self.0 - base.0
-    }
-
-    pub fn cell_offset_from(self, base: Address) -> usize {
-        self.offset_from(base) / CELL_SIZE
     }
 
     /**
      * If the address is not aligned to the size of a cell, get the next cell.
      */
     pub fn nearest_cell(&self) -> Self {
-        let cell_size = CELL_SIZE;
-        Self(((self.0 + (cell_size - 1)) / 8) * 8)
+        Self(self.0.to_cells().to_bytes())
     }
 
     pub fn increment_cell(&mut self) {
-        self.0 += CELL_SIZE;
+        self.0 += Cells::one().to_bytes();
     }
 
     pub fn increment(&mut self) {
-        self.0 += 1;
+        self.0 += Bytes::one();
     }
 
-    pub fn add(&mut self, n: usize) {
+    pub fn add(&mut self, n: Bytes) {
         self.0 += n;
     }
 
-    pub fn subtract(&mut self, n: usize) {
+    pub fn subtract(&mut self, n: Bytes) {
         self.0 -= n;
     }
 
-    pub fn plus_cell(self, i: usize) -> Self {
-        Address(self.0 + (i * CELL_SIZE))
+    pub fn plus_cell(self, n: Cells) -> Self {
+        Address(self.0 + n.to_bytes())
     }
 
-    pub fn minus_cell(self, i: usize) -> Self {
-        Address(self.0 - (i * CELL_SIZE))
+    pub fn minus_cell(self, n: Cells) -> Self {
+        Address(self.0 - n.to_bytes())
     }
 
-    pub fn plus(self, i: usize) -> Self {
-        Address(self.0 + i)
+    pub fn plus(self, n: Bytes) -> Self {
+        Address(self.0 + n)
     }
 
     pub fn to_number(self) -> generic_numbers::Number {
-        self.0 as generic_numbers::Number
+        self.0.get_bytes() as generic_numbers::Number
     }
 
     pub fn as_raw(self) -> usize {
-        self.0
+        self.0.get_bytes()
     }
 }
 
@@ -106,7 +93,7 @@ impl ValueVariant for Address {
     }
 
     fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error> {
-        stack.pop().map(|number: generic_numbers::Number| Self::from_raw(number as usize))
+        Ok(Self::from_raw(stack.pop()?))
     }
 
     fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
@@ -114,7 +101,7 @@ impl ValueVariant for Address {
     }
 
     fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
-        memory.read_value(address).map(|v| Self::from_raw(v.to_number() as usize))
+        memory.read_value(address).map(|v| Self::from_raw(Bytes::bytes(v.to_number() as usize)))
     }
 
     fn push_to_memory(self, memory: &mut memory::Memory) {
@@ -128,7 +115,7 @@ impl ValueVariant for Address {
 
 impl ToString for Address {
     fn to_string(&self) -> String {
-        format!("Address({:#x})", self.0)
+        format!("Address({:#x})", self.0.get_bytes())
     }
 }
 
@@ -227,7 +214,7 @@ impl MemoryMapping {
         Self::new(base, permissions, MappingType::Empty)
     }
 
-    pub fn get_offset(&self, address: Address) -> Result<usize, Error> {
+    pub fn get_offset(&self, address: Address) -> Result<Bytes, Error> {
         if address.less_than(self.base) {
             Err(Error::InvalidAddress)
         } else {
@@ -305,16 +292,16 @@ pub struct Memory {
     The length may not be the length of the memory.  memory is the underlying
     representation of the memory, and it is allocated lazily.
      */
-    length: usize,
+    length: Cells,
     memory: Vec<value::Value>
 }
 
 impl Memory {
     pub fn new(base: usize) -> Self {
-        Self { base: Address::from_raw(base), length: 0, memory: Vec::new() }
+        Self { base: Address::from_raw(Bytes::bytes(base)), length: Cells::zero(), memory: Vec::new() }
     }
 
-    pub fn with_num_cells(mut self, num_cells: usize) -> Self {
+    pub fn with_num_cells(mut self, num_cells: Cells) -> Self {
         self.length = num_cells;
         self
     }
@@ -323,15 +310,15 @@ impl Memory {
         self.base.plus_cell(self.length)
     }
 
-    pub fn expand(&mut self, amount: usize) {
+    pub fn expand(&mut self, amount: Cells) {
         self.length += amount;
     }
 
     pub fn push_value(&mut self, value: value::Value) {
-        if self.memory.len() < self.length {
-            self.memory.resize(self.length, 0.value());
+        if Cells::cells(self.memory.len()) < self.length {
+            self.memory.resize(self.length.get_cells(), 0.value());
         }
-        self.length += 1;
+        self.length += Cells::one();
         self.memory.push(value);
     }
     
@@ -361,7 +348,7 @@ impl MemorySegment for Memory {
 
     fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
         self.check_address(address).map(|_| {
-            let index = address.cell_offset_from(self.base);
+            let index = address.offset_from(self.base).containing_cells().get_cells();
             if index >= self.memory.len() {
                 self.memory.resize(index + 1, 0.value())
             }
@@ -371,7 +358,7 @@ impl MemorySegment for Memory {
 
     fn read_value(&self, address: Address) -> Result<value::Value, Error> {
         self.check_address(address).map(|_|{
-            let index = address.cell_offset_from(self.base);
+            let index = address.offset_from(self.base).containing_cells().get_cells();
             if index >= self.memory.len() {
                 0.value()
             } else {
@@ -417,11 +404,11 @@ impl generic_numbers::StackOperations<generic_numbers::DoubleNumber> for Memory 
 #[test]
 fn memory_map_ordering_test() {
     let memory_map = MemoryMap::new(vec![
-        MemoryMapping::empty(Address::from_raw(128), MemoryPermissions::readonly()),
-        MemoryMapping::empty(Address::from_raw(32), MemoryPermissions::readonly().with_write()),
-        MemoryMapping::empty(Address::from_raw(1024), MemoryPermissions::readonly().with_execute())
+        MemoryMapping::empty(Address::from_raw(Bytes::bytes(128)), MemoryPermissions::readonly()),
+        MemoryMapping::empty(Address::from_raw(Bytes::bytes(32)), MemoryPermissions::readonly().with_write()),
+        MemoryMapping::empty(Address::from_raw(Bytes::bytes(1024)), MemoryPermissions::readonly().with_execute())
     ]);
 
-    assert!(memory_map.get(Address::from_raw(50)).is_ok());
-    assert_eq!(memory_map.get(Address::from_raw(130)).unwrap().base, Address::from_raw(128));
+    assert!(memory_map.get(Address::from_raw(Bytes::bytes(50))).is_ok());
+    assert_eq!(memory_map.get(Address::from_raw(Bytes::bytes(130))).unwrap().base, Address::from_raw(Bytes::bytes(128)));
 }

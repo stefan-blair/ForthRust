@@ -88,14 +88,14 @@ impl<KN: kernels::Kernel> kernels::Kernel for ProfilerKernel<KN> {
                     * otherwise, if the profiling word was jumped to in the middle of execution, then its
                     * return is marked by the return stack reaching its original depth
                     */
-                    profiling_word.stack_depth < state.return_stack.len()
+                    profiling_word.stack_depth < state.return_stack.len().get_cells()
                 };
             }
 
             // check if the current insturction matches the profiling word, and that we aren't already recoring
             if let Some(profiling_word) = &mut self.profiling_word {
                 if profiling_word.execution_token == current_instruction && !self.recording {
-                    profiling_word.stack_depth = state.return_stack.len();
+                    profiling_word.stack_depth = state.return_stack.len().get_cells();
                     profiling_word.manually_called = state.instruction_pointer() == None;
                     self.recording = true;
                 }
