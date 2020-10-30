@@ -1,13 +1,6 @@
 
 implementation:
     
-    united numbers, for example, 8 CELLS != 8 BYTES, compound types CELLS per PAGE * x PAGES = n CELLS or somethings
-
-    do hash map instead of binary tree in the memory map.  hashing ranges could maybe be:
-        start           - end => 
-        0x7fabcdef1000  - 0x7fabcdef2000 =>
-        left shift off the different bits of the range =>
-        thats bad tho cause some out of range addresses would still map there, maybe figure out some solution
     add threads
     handle page faults, so that if memory access to beyond self->end() may just map more memory in.          
 
@@ -22,9 +15,10 @@ debugger:
     Make the debugger into an optional feature
     Check if starts with H and then add the format in
 
+    make usize push / pop / read / write able
+    make `to` set the locals / variables to push values instead of numbers
 
 notable absent words:
 
-    EVALUATE: literally evaluate a string on the stack
+    EXIT: basically ret
     COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just puts the execution token.  but if its something like `+`, it literally compiles the code into it
-    STATE:    returns address of state, which contains a 1 if in compilation state, and 0 if in interpret state

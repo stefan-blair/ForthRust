@@ -33,24 +33,6 @@ mod helper_macros {
     }
 
     /**
-     * Macro used to generically absorb any type of comment.
-     */
-    #[macro_export]
-    macro_rules! absorb_comment {
-        ($closing_brace:expr) => {
-            |state| {
-                while let Ok(c) = state.input_stream.next_char() {
-                    if c == $closing_brace {
-                        return Result::Ok(());
-                    }
-                }
-            
-                Err(evaluate::Error::NoMoreTokens)    
-            }        
-        };
-    }
-
-    /**
      * Macro that implements POSTPONE, instead of executing the execution token, pushing it to memory,
      * "postponing" it to be part of the current definition.
      */
@@ -60,6 +42,33 @@ mod helper_macros {
             $state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation($execution_token).value());
         };
     }
+}
+
+/**
+ * Helper mod for tokens whose operations require them to scan ahead for some closing token.  For example, the comment
+ * ( .... ), requires to scan ahead to the next ')' character.  This mod contains structs that allow those end characters
+ * to be specified at compile time via traits.
+ */
+mod closing_tokens {
+    
+    pub trait ClosingToken {
+        const CLOSING_TOKEN: char;
+    }
+
+    macro_rules! closing_token {
+        ($name:tt, $closing_token:expr) => {
+            pub struct $name;
+
+            impl ClosingToken for $name {
+                const CLOSING_TOKEN: char = $closing_token;
+            }
+        }
+    }
+
+    closing_token!(CurlyBracket, '}');
+    closing_token!(NewLine, '\n');
+    closing_token!(Parenthesis, ')');
+    closing_token!(Pipe, '|');
 }
 
 // built in operators; name, whether its immediate or not, and the function to execute
@@ -94,7 +103,8 @@ pub const UNCOMPILED_OPERATIONS: &[&str] = &[
     ": ELSE POSTPONE 0 HERE 1 ALLOT SWAP HERE _BNE ; IMMEDIATE",
     ": THEN HERE _BNE ; IMMEDIATE",
     // get current index of do ... loop
-    ": I R> R@ SWAP >R ;",
+    ": I R> R> R@ SWAP >R SWAP >R ;",
+
     // get next character
     ": [CHAR] CHAR POSTPONE LITERAL ; IMMEDIATE",
     // some increment instructions

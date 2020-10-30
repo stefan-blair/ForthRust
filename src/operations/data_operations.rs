@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::postpone;
+use crate::environment::memory::MemorySegment;
 use evaluate::definition;
 
 
@@ -45,7 +46,7 @@ pub fn constant<N: value::ValueVariant>(state: &mut evaluate::ForthState) -> eva
 }
 
 pub fn does(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let object_address = if let definition::ExecutionToken::Definition(address) = state.definitions.get(state.definitions.get_most_recent_nametag()).execution_token {
+    let object_address = if let definition::ExecutionToken::Definition(address) = state.definitions.most_recent_definition().execution_token {
         address
     } else {
         return Ok(())
@@ -70,13 +71,32 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
     let nametag = state.definitions.get_nametag(&word)?;
 
-    instruction_compiler::InstructionCompiler::with_state(state).push(nametag.to_number())?;
-    state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
-        let nametag = evaluate::definition::NameTag::from(state.stack.pop()?);
-        let number = state.stack.pop::<generic_numbers::Number>()?;
-        state.definitions.set(nametag, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false));
-        Ok(())
-    }));
+    match nametag {
+        evaluate::definition::NameTag::Definition(n) => {
+            // push the definition's index
+            state.data_space.push(evaluate::definition::ExecutionToken::Number(n as generic_numbers::Number));
+            // push the operating code
+            state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+                let index = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+                let number = state.stack.pop::<generic_numbers::Number>()?;
+                state.definitions.set_by_index(index, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false))
+            }));        
+        },
+        evaluate::definition::NameTag::TempDefinition(n) => {
+            if let definition::ExecutionToken::Definition(address) = state.definitions.get_temp_by_index(n)?.execution_token {
+                if let definition::ExecutionToken::Number(offset) = state.data_space.read(address)? {
+                    state.data_space.push(evaluate::definition::ExecutionToken::Number(offset));
+                    state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+                        let offset = state.stack.pop::<generic_numbers::Number>()? as usize;
+                        let number = state.stack.pop::<generic_numbers::Number>()?;
+                        
+                        state.return_stack.write_to_frame(offset, number)?;
+                        Ok(())
+                    }))
+                }                
+            }
+        }
+    }
 
     Ok(())
 }

@@ -8,9 +8,8 @@ pub fn do_init_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     // add an instruction to move the address from the stack to the return stack
     postpone!(state, stack_operations::stack_to_return_stack::<value::Value>);
     // add instructions to the current definition that initialize the loop by moving the bounds onto the return stack
-    postpone!(state, super::stack_operations::stack_to_return_stack::<value::DoubleValue>);
+    postpone!(state, stack_operations::stack_to_return_stack::<value::DoubleValue>);
 
-    // put the the address of the loop prologue so the end can patch it     TODO add this to all of the loop beginnings
     state.stack.push(state.data_space.top().to_number());
 
     Result::Ok(())

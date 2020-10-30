@@ -160,7 +160,7 @@ pub struct ForthState<'a, 'i, 'o> {
     instruction_pointer: Option<memory::Address>,
     // contains the current instruction, if any, being executed
     current_instruction: Option<definition::ExecutionToken>,
-    pub definitions: definition::DefinitionSet,
+    pub definitions: definition::DefinitionTable,
     pub compiled_instructions: compiled_instructions::CompiledInstructions<'a>,
 }
 
@@ -176,17 +176,17 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         let internal_state_memory = InternalStateMemory::new(0x5deadbeef000);
 
         let memory_map = memory::MemoryMap::new(vec![
-            memory::MemoryMapping::named(data_space.get_base(), memory::MemoryPermissions::all(), |state| &state.data_space, |state| &mut state.data_space, "data_space"),
-            memory::MemoryMapping::named(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack, "stack"),
-            memory::MemoryMapping::named(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack, "return stack"),
-            memory::MemoryMapping::named(pad.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.pad, |state| &mut state.pad, "pad"),
-            memory::MemoryMapping::named(heap.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.heap, |state| &mut state.heap, "heap"),
-            memory::MemoryMapping::named(internal_state_memory.get_base(), memory::MemoryPermissions::readonly(), |state| state, |state| state, "[internal mappings]"),
+            memory::MemoryMapping::special(data_space.get_base(), memory::MemoryPermissions::all(), |state| &state.data_space, |state| &mut state.data_space).with_name("data_space"),
+            memory::MemoryMapping::special(stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.stack, |state| &mut state.stack).with_name("stack"),
+            memory::MemoryMapping::special(return_stack.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.return_stack, |state| &mut state.return_stack).with_name("return_stack"),
+            memory::MemoryMapping::special(pad.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.pad, |state| &mut state.pad).with_name("pad"),
+            memory::MemoryMapping::special(heap.get_base(), memory::MemoryPermissions::readwrite(), |state| &state.heap, |state| &mut state.heap).with_name("heap"),
+            memory::MemoryMapping::special(internal_state_memory.get_base(), memory::MemoryPermissions::readonly(), |state| state, |state| state).with_name("[internal mappings]"),
         ]);
 
         Self {
             compiled_instructions: compiled_instructions::CompiledInstructions::new(),
-            definitions: definition::DefinitionSet::new(),
+            definitions: definition::DefinitionTable::new(),
 
             data_space, stack, return_stack, pad, heap, memory_map, internal_state_memory, 
             anonymous_pages: Vec::new(),
@@ -241,7 +241,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     fn get_memory_segment<'x>(&'x self, mapping: memory::MemoryMapping) -> Result<&'x dyn MemorySegment, Error> {
         match mapping.mapping_type {
             memory::MappingType::Empty => Err(Error::InvalidAddress),
-            memory::MappingType::Named { getter, .. } => Ok(getter(self)),
+            memory::MappingType::Special { getter, .. } => Ok(getter(self)),
             memory::MappingType::Anonymous { index: i } => Ok(&self.anonymous_pages[i])
         }
     }
@@ -249,7 +249,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     fn get_mut_memory_segment<'x>(&'x mut self, mapping: memory::MemoryMapping) -> Result<&'x mut dyn MemorySegment, Error> {
         match mapping.mapping_type {
             memory::MappingType::Empty => Err(Error::InvalidAddress),
-            memory::MappingType::Named { mutable_getter, .. } => Ok(mutable_getter(self)),
+            memory::MappingType::Special { mutable_getter, .. } => Ok(mutable_getter(self)),
             memory::MappingType::Anonymous { index: i } => Ok(&mut self.anonymous_pages[i])
         }
     }
@@ -317,10 +317,13 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         self.instruction_pointer.replace(address).map(|addr| {
             self.return_stack.push(addr.to_number());
         });
+        self.return_stack.push_frame();
+
         Ok(())
     }
 
     pub fn return_from(&mut self) -> ForthResult {
+        self.return_stack.pop_frame()?;
         self.instruction_pointer = self.return_stack.pop().ok();
         Ok(())
     }

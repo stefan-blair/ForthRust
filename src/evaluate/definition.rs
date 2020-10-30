@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use crate::environment::{memory, generic_numbers, stack, value};
 use crate::operations;
 use crate::io::tokens;
-use super::Error;
+use super::{ForthResult, Error};
 
 
 #[derive(Clone, Copy)]
@@ -100,23 +100,6 @@ impl value::ValueVariant for ExecutionToken {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct NameTag(usize);
-
-impl NameTag {
-    pub fn from(index: generic_numbers::Number) -> Self {
-        Self(index as usize)
-    }
-
-    pub fn to_offset(self) -> usize {
-        self.0
-    }
-
-    pub fn to_number(self) -> generic_numbers::Number {
-        self.0 as generic_numbers::Number
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct Definition {
     pub immediate: bool,
@@ -129,60 +112,117 @@ impl Definition {
     }
 }
 
-pub struct DefinitionSet {
-    nametag_map: HashMap<String, NameTag>,
-    most_recent: NameTag,
-    definitions: Vec<Definition>
+pub enum NameTag {
+    Definition(usize),
+    TempDefinition(usize),
 }
 
-impl DefinitionSet {
+pub struct DefinitionTable {
+    nametag_map: HashMap<String, usize>,
+    definitions: Vec<Definition>,
+    most_recent: usize,
+
+    temp_nametag_map: HashMap<String, usize>,
+    temp_definitions: Vec<Definition>,
+}
+
+impl DefinitionTable {
     pub fn new() -> Self {
         Self::from_definitions(Vec::new(), HashMap::new())
     }
 
-    pub fn from_definitions(definitions: Vec<Definition>, nametag_map: HashMap<String, NameTag>) -> Self {
-        DefinitionSet {
+    pub fn from_definitions(definitions: Vec<Definition>, nametag_map: HashMap<String, usize>) -> Self {
+        Self {
             nametag_map,
             definitions,
-            most_recent: NameTag(0)
+            most_recent: 0,
+
+            temp_nametag_map: HashMap::new(),
+            temp_definitions: Vec::new(),
         }
     }
     
     pub fn get_from_token(&self, token: tokens::Token) -> Result<Definition, Error> {
         match token {
             tokens::Token::Integer(i) => Ok(Definition::new(ExecutionToken::Number(i), false)),
-            tokens::Token::Word(word) => self.nametag_map.get(&word).map(|nametag| self.get(*nametag)).ok_or(Error::UnknownWord(word))
+            tokens::Token::Word(word) => self.get_from_str(&word),
         }
     }
 
-    pub fn get(&self, nametag: NameTag) -> Definition {
-        self.definitions[nametag.to_offset()]
+    pub fn get_from_str(&self, name: &str) -> Result<Definition, Error> {
+        self.nametag_map.get(name).map(|nametag| self.definitions[*nametag])
+            .or_else(|| self.temp_nametag_map.get(name).map(|nametag| self.temp_definitions[*nametag]))
+            .ok_or(Error::UnknownWord(name.to_string()))
     }
 
-    pub fn get_nametag(&self, word: &str) -> Result<NameTag, Error> {
-        self.nametag_map.get(word).map(|x| *x).ok_or(Error::UnknownWord(String::from(word)))
+    pub fn get_by_index(&self, index: usize) -> Result<Definition, Error> {
+        if index >= self.definitions.len() {
+            Err(Error::InvalidNumber)
+        } else {
+            Ok(self.definitions[index])
+        }
     }
 
-    pub fn make_immediate(&mut self, nametag: NameTag) {
-        self.definitions[nametag.to_offset()].immediate = true;
+    pub fn set_by_index(&mut self, index: usize, definition: Definition) -> ForthResult {
+        if index >= self.definitions.len() {
+            Err(Error::InvalidNumber)
+        } else {
+            self.definitions[index] = definition;
+            Ok(())
+        }
+    }
+    
+    pub fn get_temp_by_index(&self, index: usize) -> Result<Definition, Error> {
+        if index >= self.temp_definitions.len() {
+            Err(Error::InvalidNumber)
+        } else {
+            Ok(self.temp_definitions[index])
+        }
     }
 
-    pub fn add(&mut self, word: String, definition: Definition) -> NameTag {
-        let nametag = NameTag(self.definitions.len());
-        self.nametag_map.insert(word, nametag);
+    pub fn set_temp_by_index(&mut self, index: usize, definition: Definition) -> ForthResult {
+        if index >= self.temp_definitions.len() {
+            Err(Error::InvalidNumber)
+        } else {
+            self.temp_definitions[index] = definition;
+            Ok(())
+        }
+    }
+
+    pub fn get_nametag(&self, name: &str) -> Result<NameTag, Error> {
+        self.nametag_map.get(name).map(|nametag| NameTag::Definition(*nametag))
+            .or_else(|| self.temp_nametag_map.get(name).map(|nametag| NameTag::TempDefinition(*nametag)))
+            .ok_or(Error::UnknownWord(name.to_string()))
+    } 
+
+    // fn get_nametag(&self, word: &str) -> Result<NameTag, Error> {
+    //     self.nametag_map.get(word).map(|x| *x).ok_or(Error::UnknownWord(String::from(word)))
+    // }
+
+    pub fn make_most_recent_immediate(&mut self) {
+        self.definitions[self.most_recent].immediate = true
+    }
+
+    pub fn most_recent_definition(&mut self) -> &mut Definition {
+        &mut self.definitions[self.most_recent]
+    }
+
+    pub fn add(&mut self, word: String, definition: Definition) {
+        let index = self.definitions.len();
+        self.nametag_map.insert(word, index);
         self.definitions.push(definition);
-        self.most_recent = nametag;
-
-        nametag
+        self.most_recent = index;
     }
 
-    pub fn set(&mut self, nametag: NameTag, definition: Definition) -> NameTag {
-        self.definitions[nametag.to_offset()] = definition;
-        nametag
+    pub fn add_temp(&mut self, word: String, definition: Definition) {
+        let index = self.temp_definitions.len();
+        self.temp_nametag_map.insert(word, index);
+        self.temp_definitions.push(definition);
     }
 
-    pub fn get_most_recent_nametag(&self) -> NameTag {
-        self.most_recent
+    pub fn clear_temp(&mut self) {
+        self.temp_nametag_map = HashMap::new();
+        self.temp_definitions = Vec::new();
     }
 
     pub fn debug_only_get_name(&self, execution_token: ExecutionToken) -> Option<String> {
@@ -196,7 +236,7 @@ impl DefinitionSet {
             }
         }
 
-        for (word, xt) in self.nametag_map.iter().map(|(word, key)| (word, self.get(*key).execution_token)) {
+        for (word, xt) in self.nametag_map.iter().map(|(word, index)| (word, self.get_by_index(*index).unwrap().execution_token)) {
             if equal(execution_token, xt) {
                 return Some(word.clone())
             }
@@ -205,7 +245,7 @@ impl DefinitionSet {
         None
     }
 
-    pub fn debug_only_get_nametag_map(&self) -> &HashMap<String, NameTag> {
+    pub fn debug_only_get_nametag_map(&self) -> &HashMap<String, usize> {
         return &self.nametag_map;
     }
 }

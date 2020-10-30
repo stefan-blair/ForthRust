@@ -96,7 +96,7 @@ impl ValueVariant for Address {
         Ok(Self::from_raw(stack.pop()?))
     }
 
-    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
+    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> ForthResult {
         memory.write_value(address, value::Value::Number(self.to_number()))
     }
 
@@ -180,10 +180,9 @@ type SegmentGetter = for<'a> fn(&'a ForthState) -> &'a (dyn MemorySegment + 'a);
 #[derive(Clone, Copy)]
 pub enum MappingType {
     Empty,
-    Named {
+    Special {
         getter: SegmentGetter, 
         mutable_getter: MutableSegmentGetter, 
-        name: &'static str
     },
     Anonymous {
         index: usize,
@@ -195,15 +194,16 @@ pub struct MemoryMapping {
     pub base: Address,
     pub permissions: MemoryPermissions,
     pub mapping_type: MappingType,
+    pub name: Option<&'static str>
 }
 
 impl MemoryMapping {
     fn new(base: Address, permissions: MemoryPermissions, mapping_type: MappingType) -> Self {
-        Self { base, permissions, mapping_type }
+        Self { base, permissions, mapping_type, name: None }
     }
 
-    pub fn named(base: Address, permissions: MemoryPermissions, getter: SegmentGetter, mutable_getter: MutableSegmentGetter, name: &'static str) -> Self {
-        Self::new(base, permissions, MappingType::Named { getter, mutable_getter, name })
+    pub fn special(base: Address, permissions: MemoryPermissions, getter: SegmentGetter, mutable_getter: MutableSegmentGetter) -> Self {
+        Self::new(base, permissions, MappingType::Special { getter, mutable_getter })
     }
 
     pub fn anonymous(base: Address, permissions: MemoryPermissions, index: usize) -> Self {
@@ -212,6 +212,11 @@ impl MemoryMapping {
 
     pub fn empty(base: Address, permissions: MemoryPermissions) -> Self {
         Self::new(base, permissions, MappingType::Empty)
+    }
+
+    pub fn with_name(mut self, name: &'static str) -> Self {
+        self.name = Some(name);
+        self
     }
 
     pub fn get_offset(&self, address: Address) -> Result<Bytes, Error> {
@@ -275,15 +280,23 @@ impl MemoryMap {
 pub trait MemorySegment {
     fn get_base(&self) -> Address;
     fn get_end(&self) -> Address;
-    fn check_address(&self, address: Address) -> Result<(), Error> {
+    fn check_address(&self, address: Address) -> ForthResult {
         if address.between(self.get_base(), self.get_end()) {
             Ok(())
         } else {
             Err(Error::InvalidAddress)
         }
     }
-    fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error>;
+    fn write_value(&mut self, address: Address, value: value::Value) -> ForthResult;
     fn read_value(&self, address: Address) -> Result<value::Value, Error>;
+
+    fn write<T: value::ValueVariant>(&mut self, address: Address, value: T) -> ForthResult where Self: Sized {
+        value.write_to_memory(self, address)
+    }
+
+    fn read<T: value::ValueVariant>(&self, address: Address) -> Result<T, Error> where Self: Sized {
+        T::read_from_memory(self, address)
+    }
 }
 
 pub struct Memory {
@@ -346,7 +359,7 @@ impl MemorySegment for Memory {
         self.top()
     }
 
-    fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
+    fn write_value(&mut self, address: Address, value: value::Value) -> ForthResult {
         self.check_address(address).map(|_| {
             let index = address.offset_from(self.base).containing_cells().get_cells();
             if index >= self.memory.len() {

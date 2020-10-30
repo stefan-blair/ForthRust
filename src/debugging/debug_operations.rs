@@ -68,7 +68,7 @@ fn read_from_address(debug_target: &evaluate::ForthState, address: memory::Addre
 
 fn get_variables<'b>(debug_target: &'b evaluate::ForthState) -> Vec<(&'b String, memory::Address)> {
     debug_target.definitions.debug_only_get_nametag_map().iter()
-        .map(|(word, nametag)| (word, debug_target.definitions.get(*nametag).execution_token))
+        .map(|(word, index)| (word, debug_target.definitions.get_by_index(*index).unwrap().execution_token))
         .filter_map(|(word, execution_token)| match execution_token { 
             evaluate::definition::ExecutionToken::Number(addr) => Some((word, memory::Address::from_raw(Bytes::from(addr)))),
             _ => None
@@ -139,8 +139,8 @@ fn print_memory_formatted(debug_target: &evaluate::ForthState, address: memory::
 pub(in super) fn view_memory_region(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let name = debugger_state.forth.state.input_stream.next_word()?;
     for mapping in debug_target.memory_map().get_entries().iter() {
-        if let memory::MappingType::Named { name: mapping_name, .. } = mapping.mapping_type {
-            if name == mapping_name.to_uppercase() {
+        if let Some(mapping_name) = mapping.name.map(|x| x.to_uppercase()) {
+            if mapping_name == name {
                 let io = debugger_state.forth.state.get_forth_io();
                 io.output_stream.writeln(&format!("{}:", name.to_lowercase()));
                 return Ok(print_memory_formatted(debug_target, mapping.base, None, io));    
@@ -154,10 +154,9 @@ pub(in super) fn view_memory_region(debugger_state: &mut debugger::DebugState, d
 pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
     debugger_state.forth.state.output_stream.writeln("memory mapping:");
     for mapping in debug_target.memory_map().get_entries().iter() {
-        let name = match mapping.mapping_type {
-            memory::MappingType::Anonymous { .. } => "",
-            memory::MappingType::Empty => "empty",
-            memory::MappingType::Named { name, ..} => name
+        let name = match mapping.name {
+            Some(name) => name,
+            None => ""
         };
         debugger_state.forth.state.output_stream.writeln(&format!("{}   {}  | {}", stringify_address(mapping.base), mapping.permissions.to_string(), name));
     }
@@ -168,7 +167,6 @@ pub(in super) fn view_memory_map(debugger_state: &mut debugger::DebugState, debu
 pub(in super) fn examine_memory(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let address: memory::Address = debugger_state.forth.state.stack.pop()?;
     let format = debugger_state.forth.state.input_stream.next_word()?;
-    println!("reading from {}", address.to_string());
     debugger_state.forth.state.output_stream.writeln(&read_from_address(debug_target, address, &format[..])?);
 
     Ok(())
@@ -223,8 +221,8 @@ pub(in super) fn view_state(debugger_state: &mut debugger::DebugState, debug_tar
 }
 
 pub(in super) fn all_commands(debugger_state: &mut debugger::DebugState, debug_target: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    for (word, nametag) in debug_target.definitions.debug_only_get_nametag_map().iter() {
-        let definition = debug_target.definitions.get(*nametag);
+    for (word, index) in debug_target.definitions.debug_only_get_nametag_map().iter() {
+        let definition = debug_target.definitions.get_by_index(*index)?;
         let immediate_string = if definition.immediate {
             "immediate"
         } else {

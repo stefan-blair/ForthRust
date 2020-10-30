@@ -73,7 +73,6 @@ impl ToString for BranchFalse {
     }
 }
 
-
 pub struct InstructionCompiler<'a, 'b, 'c, 'd> {
     state: &'a mut evaluate::ForthState<'b, 'c, 'd>,
     // marks where the compiled instruction should be loaded.  if None, defaults to pushing the instruction onto the current definition

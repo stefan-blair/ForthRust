@@ -1,4 +1,4 @@
-use crate::evaluate::Error;
+use crate::evaluate::{ForthResult, Error};
 use super::value;
 use super::generic_numbers::{self, ConvertOperations, AsValue};
 use super::memory::{Address, MemorySegment};
@@ -8,12 +8,17 @@ use super::units::{Bytes, Cells};
 // contains stack in the vec, and offset contains the current base pointer (not used in data stack)
 pub struct Stack {
     base: Address,
-    stack: Vec<value::Value>
+    stack: Vec<value::Value>,
+    frame_offset: usize,
 }
 
 impl Stack {
     pub fn new(base: usize) -> Self {
-        Self { base: Address::from_raw(Bytes::bytes(base)), stack: Vec::new() }
+        Self { 
+            base: Address::from_raw(Bytes::bytes(base)), 
+            stack: Vec::new(),
+            frame_offset: 0,
+        }
     }
 
     pub(super) fn push_value(&mut self, value: value::Value) {
@@ -41,6 +46,28 @@ impl Stack {
 
     pub fn len(&self) -> Cells {
         Cells::cells(self.stack.len())
+    }
+
+    pub fn push_frame(&mut self) {
+        self.push(self.frame_offset as generic_numbers::UnsignedNumber);
+        self.frame_offset = self.stack.len();
+    }
+
+    pub fn pop_frame(&mut self) -> ForthResult {
+        self.stack.truncate(self.frame_offset);
+        if self.frame_offset > 0 {
+            self.frame_offset = self.pop::<generic_numbers::UnsignedNumber>()? as usize;    
+        }
+        Ok(())
+    }
+
+    pub fn read_from_frame<T: value::ValueVariant>(&self, offset: usize) -> Result<T, Error> {
+        T::read_from_memory(self, self.get_base().plus_cell(Cells::cells(self.frame_offset + offset)))
+    }
+
+    pub fn write_to_frame<T: value::ValueVariant>(&mut self, offset: usize, value: T) -> ForthResult {
+        let address = self.get_base().plus_cell(Cells::cells(self.frame_offset + offset));
+        value.write_to_memory(self, address)
     }
 
     pub fn to_vec(&self) -> Vec<value::Value> {
