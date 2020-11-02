@@ -1,6 +1,7 @@
-use crate::evaluate::{self, ForthResult};
+use crate::evaluate::{self, definition};
 use crate::memory;
 use crate::environment::{generic_numbers, value};
+use super::CompiledInstructions;
 
 
 pub trait CloneCompiledInstruction<'a> {
@@ -73,44 +74,28 @@ impl ToString for BranchFalse {
     }
 }
 
-pub struct InstructionCompiler<'a, 'b, 'c, 'd> {
-    state: &'a mut evaluate::ForthState<'b, 'c, 'd>,
-    // marks where the compiled instruction should be loaded.  if None, defaults to pushing the instruction onto the current definition
-    address: Option<memory::Address>
+pub struct InstructionCompiler<'b, 'a> {
+    pub compiled_instructions: &'b mut CompiledInstructions<'a>
 }
 
-impl<'a, 'b, 'c, 'd> InstructionCompiler<'a, 'b, 'c, 'd> {
-    pub fn with_state(state: &'a mut evaluate::ForthState<'b, 'c, 'd>) -> Self {
-        Self { state, address: None }
-    }
-
-    pub fn with_address(mut self, address: memory::Address) -> Self {
-        self.address = Some(address);
-        self
-    }
-
-    pub fn branch_false(&mut self, destination: memory::Address) -> ForthResult {
+impl<'b, 'a> InstructionCompiler<'b, 'a> {
+    pub fn branch_false(&mut self, destination: memory::Address) -> definition::ExecutionToken {
         self.compile_instruction(BranchFalse(destination))
     }
     
-    pub fn branch(&mut self, destination: memory::Address) -> ForthResult {
+    pub fn branch(&mut self, destination: memory::Address) -> definition::ExecutionToken {
         self.compile_instruction(Branch(destination))
     }
     
-    pub fn push<N: value::ValueVariant + 'b>(&mut self, value: N) -> ForthResult {
+    pub fn push<N: value::ValueVariant + 'a>(&mut self, value: N) -> definition::ExecutionToken {
         self.compile_instruction(Push(value))
     }
 
-    pub fn mem_push<N: value::ValueVariant + 'b>(&mut self, value: N) -> ForthResult {
+    pub fn mem_push<N: value::ValueVariant + 'a>(&mut self, value: N) -> definition::ExecutionToken {
         self.compile_instruction(MemPush(value))
     }
 
-    fn compile_instruction<T: CompiledInstruction<'b> + 'b>(&mut self, instruction: T) -> ForthResult {
-        let xt = self.state.compiled_instructions.add(Box::new(instruction));
-        if let Some(address) = self.address {
-            self.state.write(address, xt)
-        } else {
-            Ok(self.state.data_space.push(xt))
-        }
+    fn compile_instruction<T: CompiledInstruction<'a> + 'a>(&mut self, instruction: T) -> definition::ExecutionToken {
+        self.compiled_instructions.add(Box::new(instruction))
     }
 }

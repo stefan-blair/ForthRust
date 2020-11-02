@@ -27,16 +27,22 @@ pub fn end_word_compilation(state: &mut ForthState) -> ForthResult {
 pub fn postpone(state: &mut ForthState) -> ForthResult {
     let definition = state.definitions.get_from_token(state.input_stream.next()?)?;
 
-    if definition.immediate {
-        Ok(state.data_space.push(definition.execution_token))
-    } else {
-        instruction_compiler::InstructionCompiler::with_state(state).mem_push(definition.execution_token.value())
-    }
+    state.data_space.push(
+        if definition.immediate {
+            definition.execution_token
+        } else {
+            state.compiled_instructions.compiler().mem_push(definition.execution_token.value())
+        }
+    );
+
+    Ok(())
 }
 
 pub fn literal<N: value::ValueVariant + 'static>(state: &mut ForthState) -> ForthResult {
     let value = state.stack.pop::<N>()?;
-    instruction_compiler::InstructionCompiler::with_state(state).push(value)
+    state.data_space.push(state.compiled_instructions.compiler().push(value));
+
+    Ok(())
 }
 
 pub fn execute(state: &mut ForthState) -> ForthResult {
@@ -54,8 +60,8 @@ pub fn read_execution_token(state: &mut ForthState) -> ForthResult {
 pub fn get_execution_token(state: &mut ForthState) -> ForthResult {
     state.input_stream.next()
         .and_then(|token| state.definitions.get_from_token(token))
-        .and_then(|definition| instruction_compiler::InstructionCompiler::with_state(state).push(definition.execution_token.value()))
-}
+        .map(|definition| state.data_space.push(state.compiled_instructions.compiler().push(definition.execution_token.value())))
+    }
 
 /**
  * Generates a bne instruction.  Pops an address off of the stack to be the destination for the branch.
@@ -64,13 +70,15 @@ pub fn get_execution_token(state: &mut ForthState) -> ForthResult {
 pub fn write_branch_false(state: &mut ForthState) -> ForthResult {
     let branch_target = state.stack.pop()?;
     let destination = state.stack.pop()?;
-    instruction_compiler::InstructionCompiler::with_state(state).with_address(destination).branch_false(branch_target)
+    let xt = state.compiled_instructions.compiler().branch_false(branch_target);
+    state.write(destination, xt)
 }
 
 pub fn write_branch(state: &mut ForthState) -> ForthResult {
     let branch_target = state.stack.pop()?;
     let destination = state.stack.pop()?;
-    instruction_compiler::InstructionCompiler::with_state(state).with_address(destination).branch(branch_target)
+    let xt = state.compiled_instructions.compiler().branch(branch_target);
+    state.write(destination, xt)
 }
 
 pub fn body(state: &mut ForthState) -> ForthResult {
@@ -146,9 +154,7 @@ pub fn locals<T: closing_tokens::ClosingToken>(state: &mut ForthState) -> ForthR
     }
 
     let jmp_destination = state.data_space.top();
-    instruction_compiler::InstructionCompiler::with_state(state).with_address(jmp_addr).branch(jmp_destination)?;
-
-    Ok(())
+    state.data_space.write(jmp_addr, state.compiled_instructions.compiler().branch(jmp_destination))
 }
 
 pub fn execution_mode_address(state: &mut ForthState) -> ForthResult {

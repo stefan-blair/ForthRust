@@ -31,7 +31,7 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthState) -> evaluate::Fort
 
     // get the address of the top of the loop, and patch the conditional branch at the end of the loop
     let loop_address = state.stack.pop()?;
-    instruction_compiler::InstructionCompiler::with_state(state).branch_false(loop_address)?;
+    state.data_space.push(state.compiled_instructions.compiler().branch_false(loop_address));
 
     // add an epilogue to pop the state off of the return stack
     state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
@@ -64,15 +64,14 @@ pub fn begin_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 
 pub fn until_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let loop_address = state.stack.pop()?;
-    instruction_compiler::InstructionCompiler::with_state(state).branch_false(loop_address)?;
-
+    state.data_space.push(state.compiled_instructions.compiler().branch_false(loop_address));
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
     state.write(loop_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn again_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let loop_address = state.stack.pop()?;
-    instruction_compiler::InstructionCompiler::with_state(state).branch(loop_address)?;
+    state.data_space.push(state.compiled_instructions.compiler().branch(loop_address));
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
     state.write(loop_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
@@ -89,11 +88,11 @@ pub fn repeat_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 
     // add a branch instruction to the beginning of the loop unconditionally
     let loop_start_address = state.stack.pop()?;
-    instruction_compiler::InstructionCompiler::with_state(state).branch(loop_start_address)?;
+    state.data_space.push(state.compiled_instructions.compiler().branch(loop_start_address));
 
     // back patch the conditional branch in the middle of the loop
     let loop_middle_address = state.data_space.top();
-    instruction_compiler::InstructionCompiler::with_state(state).with_address(branch_address).branch_false(loop_middle_address)?;
+    state.data_space.write(branch_address, state.compiled_instructions.compiler().branch_false(loop_middle_address))?;
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
     state.write(loop_start_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))

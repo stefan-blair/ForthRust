@@ -1,7 +1,6 @@
 use super::*;
 
 use crate::postpone;
-use crate::environment::memory::MemorySegment;
 use evaluate::definition;
 
 
@@ -61,9 +60,10 @@ pub fn does(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 pub fn value(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let word = state.input_stream.next_word()?;
 
-    let number = state.stack.pop::<generic_numbers::Number>()?;
+    let v = state.stack.pop::<value::Value>()?;
+    let xt = state.compiled_instructions.compiler().push(v);
+    state.definitions.add(word, definition::Definition::new(xt, false));
 
-    state.definitions.add(word, definition::Definition::new(definition::ExecutionToken::Number(number), false));
     Ok(())
 }
 
@@ -78,8 +78,10 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
             // push the operating code
             state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
                 let index = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
-                let number = state.stack.pop::<generic_numbers::Number>()?;
-                state.definitions.set_by_index(index, evaluate::definition::Definition::new(evaluate::definition::ExecutionToken::Number(number), false))
+                let v = state.stack.pop::<value::Value>()?;
+                let xt = state.compiled_instructions.compiler().push(v);
+
+                state.definitions.set_by_index(index, evaluate::definition::Definition::new(xt, false))
             }));        
         },
         evaluate::definition::NameTag::TempDefinition(n) => {
@@ -88,9 +90,9 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
                     state.data_space.push(evaluate::definition::ExecutionToken::Number(offset));
                     state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
                         let offset = state.stack.pop::<generic_numbers::Number>()? as usize;
-                        let number = state.stack.pop::<generic_numbers::Number>()?;
+                        let v = state.stack.pop::<value::Value>()?;
                         
-                        state.return_stack.write_to_frame(offset, number)?;
+                        state.return_stack.write_to_frame(offset, v)?;
                         Ok(())
                     }))
                 }                
