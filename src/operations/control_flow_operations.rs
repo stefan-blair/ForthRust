@@ -104,6 +104,10 @@ pub fn leave(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     state.jump_to(end_of_loop_address)
 }
 
+pub fn exit(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+    state.return_from()
+}
+
 pub fn throw(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let error_code = state.stack.pop::<generic_numbers::UnsignedNumber>()?;
     Err(evaluate::Error::Exception(error_code))
@@ -136,6 +140,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("WHILE", true, while_loop),
         ("REPEAT", true, repeat_loop),
         ("LEAVE", false, leave),
+        ("EXIT", false, exit),
         ("THROW", false, throw),
         ("EVALUATE", false, evaluate_string),
     ]
