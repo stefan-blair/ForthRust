@@ -114,7 +114,7 @@ pub fn throw(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 }
 
 pub fn evaluate_string(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let length: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let length: usize = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
     // read the characters into a vector

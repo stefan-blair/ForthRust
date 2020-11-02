@@ -37,7 +37,7 @@ pub fn get_word(state: &mut ForthState) -> ForthResult {
 }
 
 pub fn trailing(state: &mut ForthState) -> ForthResult {
-    let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let count: usize = state.stack.pop()?;
     let address: memory::Address = state.stack.pop()?;
 
     let mut new_count = Bytes::zero();
@@ -55,7 +55,7 @@ pub fn trailing(state: &mut ForthState) -> ForthResult {
 }
 
 pub fn cmove(state: &mut ForthState) -> ForthResult {
-    let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let count: usize = state.stack.pop()?;
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
 
@@ -68,7 +68,7 @@ pub fn cmove(state: &mut ForthState) -> ForthResult {
 }
 
 pub fn cmove_backwards(state: &mut ForthState) -> ForthResult {
-    let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let count: usize = state.stack.pop()?;
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
 
@@ -81,7 +81,7 @@ pub fn cmove_backwards(state: &mut ForthState) -> ForthResult {
 }
 
 pub fn move_noclobber(state: &mut ForthState) -> ForthResult {
-    let count: generic_numbers::UnsignedNumber = state.stack.pop()?;
+    let count: usize = state.stack.pop()?;
     let destination: memory::Address = state.stack.pop()?;
     let source: memory::Address = state.stack.pop()?;
     

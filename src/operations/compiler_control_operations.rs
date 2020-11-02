@@ -146,7 +146,7 @@ pub fn locals<T: closing_tokens::ClosingToken>(state: &mut ForthState) -> ForthR
             state.return_from()?;
 
             // sort of cheating here, but because we just returned, we can operate on the previous stack frame, which is the one we care about
-            let offset = state.stack.pop::<generic_numbers::Number>()? as usize;
+            let offset = state.stack.pop()?;
             let value = state.return_stack.read_from_frame::<value::Value>(offset)?;
             state.stack.push(value);
             Ok(())

@@ -56,7 +56,7 @@ impl Stack {
     pub fn pop_frame(&mut self) -> ForthResult {
         self.stack.truncate(self.frame_offset);
         if self.frame_offset > 0 {
-            self.frame_offset = self.pop::<generic_numbers::UnsignedNumber>()? as usize;    
+            self.frame_offset = self.pop()?;    
         }
         Ok(())
     }

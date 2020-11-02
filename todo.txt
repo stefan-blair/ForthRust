@@ -7,6 +7,10 @@ implementation:
     track lengths of functions in cells
     traits can have const values.  can use this to hardcode settings in a forth machine, for example, the ideal inline length
 
+notable absent words:
+
+    COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just puts the execution token.  but if its something like `+`, it literally compiles the code into it
+
 debugger: 
     
     make some errors recoverable (maybe separate kernel)
@@ -14,11 +18,3 @@ debugger:
     remove all of the unwraps from Debugger
     Make the debugger into an optional feature
     Check if starts with H and then add the format in
-
-    make usize push / pop / read / write able
-    make `to` set the locals / variables to push values instead of numbers
-
-notable absent words:
-
-    EXIT: basically ret
-    COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just puts the execution token.  but if its something like `+`, it literally compiles the code into it

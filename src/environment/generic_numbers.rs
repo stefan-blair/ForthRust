@@ -264,3 +264,33 @@ macro_rules! convert_operations {
 
 convert_operations!(Byte, Number);
 convert_operations!(Number, DoubleNumber);
+
+/**
+ * Implement ValueVariant for usize, so that it can be easily grabbed from the state
+ */
+impl value::ValueVariant for usize {
+    // connector functions used for stack and memory operations
+    fn push_to_stack(self, stack: &mut stack::Stack) {
+        (self as UnsignedNumber).push_to_stack(stack)
+    }
+
+    fn pop_from_stack(stack: &mut stack::Stack) -> Result<Self, Error> {
+        UnsignedNumber::pop_from_stack(stack).map(|i| i as usize)
+    }
+
+    fn write_to_memory(self, memory: &mut dyn memory::MemorySegment, address: memory::Address) -> Result<(), Error> {
+        (self as UnsignedNumber).write_to_memory(memory, address)
+    }
+
+    fn read_from_memory(memory: &dyn memory::MemorySegment, address: memory::Address) -> Result<Self, Error> {
+        UnsignedNumber::read_from_memory(memory, address).map(|i| i as usize)
+    }
+
+    fn push_to_memory(self, memory: &mut memory::Memory) {
+        (self as UnsignedNumber).push_to_memory(memory)
+    }
+
+    fn size() -> usize {
+        1
+    }
+}

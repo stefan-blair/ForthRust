@@ -77,7 +77,7 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
             state.data_space.push(evaluate::definition::ExecutionToken::Number(n as generic_numbers::Number));
             // push the operating code
             state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
-                let index = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+                let index = state.stack.pop()?;
                 let v = state.stack.pop::<value::Value>()?;
                 let xt = state.compiled_instructions.compiler().push(v);
 
@@ -89,7 +89,7 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
                 if let definition::ExecutionToken::Number(offset) = state.data_space.read(address)? {
                     state.data_space.push(evaluate::definition::ExecutionToken::Number(offset));
                     state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
-                        let offset = state.stack.pop::<generic_numbers::Number>()? as usize;
+                        let offset = state.stack.pop()?;
                         let v = state.stack.pop::<value::Value>()?;
                         
                         state.return_stack.write_to_frame(offset, v)?;
@@ -104,13 +104,13 @@ pub fn to(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 }
 
 pub fn cells(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let number = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
-    state.stack.push((number * memory::CELL_SIZE) as generic_numbers::UnsignedNumber);
+    let cells = state.stack.pop::<Cells>()?;
+    state.stack.push(cells.to_bytes());
     Ok(())
 }
 
 pub fn map_anonymous(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    let num_pages = state.stack.pop::<generic_numbers::UnsignedNumber>()? as usize;
+    let num_pages = state.stack.pop()?;
     let address = state.create_anonymous_mapping(num_pages)?;
     state.stack.push(address);
     Ok(())

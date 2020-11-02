@@ -286,19 +286,19 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         }
     }
 
-    pub fn create_anonymous_mapping(&mut self, num_pages: usize) -> Result<memory::Address, Error> {
+    pub fn create_anonymous_mapping(&mut self, num_pages: Pages) -> Result<memory::Address, Error> {
         let base = self.next_anonymous_mapping;
-        self.next_anonymous_mapping.add(Pages::one().to_bytes() * num_pages);
+        self.next_anonymous_mapping.add(num_pages.to_bytes());
 
         self.create_anonymous_mapping_at(base, num_pages)
     }
 
-    pub fn create_anonymous_mapping_at(&mut self, address: memory::Address, num_pages: usize) -> Result<memory::Address, Error> {
+    pub fn create_anonymous_mapping_at(&mut self, address: memory::Address, num_pages: Pages) -> Result<memory::Address, Error> {
         let index = self.anonymous_pages.len();
 
         self.anonymous_pages
             .push(memory::Memory::new(address.as_raw())
-            .with_num_cells(Pages::one().to_cells() * num_pages));
+            .with_num_cells(num_pages.to_cells()));
         self.memory_map.add(memory::MemoryMapping::anonymous(address, memory::MemoryPermissions::readwrite(), index))
             .map(|_| address)
     }
