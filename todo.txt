@@ -2,7 +2,6 @@
 implementation:
     
     add threads
-    handle page faults, so that if memory access to beyond self->end() may just map more memory in.          
 
     track lengths of functions in cells
     traits can have const values.  can use this to hardcode settings in a forth machine, for example, the ideal inline length

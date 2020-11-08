@@ -23,7 +23,7 @@ impl <'a, 'i, 'o> DebugState<'a, 'i, 'o> {
             stepping: false,
             breakpoints: Vec::new(),
             current_error: None,
-            forth: evaluate::Forth::<kernels::DefaultKernel>::new(),
+            forth: evaluate::Forth::default(),
             debug_operations: debug_operations::DEBUG_OPERATIONS.iter().map(|(s, o)| (s.to_string(), *o)).collect()
         }
     }

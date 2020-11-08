@@ -325,7 +325,7 @@ fn basic_free_test() {
 
 #[test]
 fn read_write_test() {
-    let mut state = crate::evaluate::ForthState::new();
+    let mut state = crate::evaluate::ForthState::new(Default::default());
     // make and verify allocations
     let allocations = vec![Bytes::bytes(50), Bytes::bytes(50), Bytes::bytes(50), Bytes::bytes(50), Bytes::bytes(90), Bytes::bytes(90)]
         .into_iter().map(|bytes| state.heap.allocate(bytes).unwrap()).collect::<Vec<_>>();

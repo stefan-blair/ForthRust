@@ -51,7 +51,7 @@ impl output_stream::OutputStream for StdoutStream {
 }
 
 fn main() {
-    let mut forth = Forth::<profiler::ProfilerKernel<debugger::DebugKernel<kernels::DefaultKernel>>>::new().with_output_stream(StdoutStream::new());
+    let mut forth = Forth::<profiler::ProfilerKernel<debugger::DebugKernel<kernels::DefaultKernel>>>::new(Default::default()).with_output_stream(StdoutStream::new());
     forth.kernel.get_next_kernel().init_io(StdinStream::new(), StdoutStream::new());
 
     let result = forth.evaluate_stream(StdinStream::new());

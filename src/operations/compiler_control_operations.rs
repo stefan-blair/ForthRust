@@ -188,7 +188,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
 
 mod test {
     #[cfg(test)]
-    use crate::{Forth, Number, stack, kernels};
+    use crate::{Forth, Number, stack};
 
 
     #[cfg(test)]
@@ -198,7 +198,7 @@ mod test {
     
     #[test]
     fn locals_test() {
-        let mut f = Forth::<kernels::DefaultKernel>::new();
+        let mut f = Forth::default();
         assert!(f.evaluate_string(": testing locals| a b c | b c a ;").is_ok());
         assert!(f.evaluate_string("1 2 3 testing 6 5 4 testing 10 1 34 testing").is_ok());
         assert_eq!(vec![2, 1, 3, 5, 6, 4, 1, 10, 34], stack_to_vec(&mut f.state.stack));    
@@ -206,7 +206,7 @@ mod test {
 
     #[test]
     fn set_locals_test() {
-        let mut f = Forth::<kernels::DefaultKernel>::new();
+        let mut f = Forth::default();
         assert!(f.evaluate_string(": testing locals| r y | r y 10 to r r ;").is_ok());
         assert!(f.evaluate_string("5 6 testing").is_ok());
         assert_eq!(vec![6, 5, 10], stack_to_vec(&mut f.state.stack));    

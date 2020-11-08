@@ -1,5 +1,6 @@
 pub mod definition;
 pub mod kernels;
+pub mod config;
 
 use crate::operations;
 use crate::environment::{memory::{self, MemorySegment}, stack, heap, value::{self, ValueVariant}, units::{Bytes, Cells, Pages}};
@@ -54,7 +55,7 @@ impl<'a, 'i, 'o> ForthIO<'a, 'i, 'o> {
 
 pub struct Forth<'a, 'i, 'o, KERNEL: kernels::Kernel> {
     pub state: ForthState<'a, 'i, 'o>,
-    pub kernel: KERNEL
+    pub kernel: KERNEL,
 }
 
 /**
@@ -63,13 +64,13 @@ pub struct Forth<'a, 'i, 'o, KERNEL: kernels::Kernel> {
  */
 impl Forth<'_, '_, '_, kernels::DefaultKernel> {
     pub fn default() -> Self {
-        Self::new()
+        Self::new(Default::default())
     }
 }
 
 impl<'a, 'i, 'o, KERNEL: kernels::Kernel> Forth<'a, 'i, 'o, KERNEL> {
-    pub fn new() -> Self {
-        let mut state = ForthState::new();
+    pub fn new(config: config::ForthConfig) -> Self {
+        let mut state = ForthState::new(config);
         let kernel = KERNEL::new(&mut state);
         let mut forth = Self { state, kernel };
 
@@ -162,18 +163,20 @@ pub struct ForthState<'a, 'i, 'o> {
     current_instruction: Option<definition::ExecutionToken>,
     pub definitions: definition::DefinitionTable,
     pub compiled_instructions: compiled_instructions::CompiledInstructions<'a>,
+
+    config: config::ForthConfig
 }
 
 impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
     // initialization
-    pub fn new() -> Self {
-        let return_stack = stack::Stack::new(0x56cadeace000);
-        let stack = stack::Stack::new(0x7aceddead000);
-        let data_space = memory::Memory::new(0x7feaddead000);
-        let pad = memory::Memory::new(0x76beaded5000);
-        let heap = heap::Heap::new(0x44ea5c69c000);
+    pub fn new(config: config::ForthConfig) -> Self {
+        let return_stack = stack::Stack::new(config.return_stack_addr);
+        let stack = stack::Stack::new(config.stack_addr);
+        let data_space = memory::Memory::new(config.data_space_addr);
+        let pad = memory::Memory::new(config.pad_addr);
+        let heap = heap::Heap::new(config.heap_addr);
 
-        let internal_state_memory = InternalStateMemory::new(0x5deadbeef000);
+        let internal_state_memory = InternalStateMemory::new(config.internal_state_memory_addr);
 
         let memory_map = memory::MemoryMap::new(vec![
             memory::MemoryMapping::special(data_space.get_base(), memory::MemoryPermissions::all(), |state| &state.data_space, |state| &mut state.data_space).with_name("data_space"),
@@ -190,7 +193,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
             data_space, stack, return_stack, pad, heap, memory_map, internal_state_memory, 
             anonymous_pages: Vec::new(),
-            next_anonymous_mapping: memory::Address::from_raw(Bytes::bytes(0x55bedead1000)),
+            next_anonymous_mapping: memory::Address::from_raw(Bytes::bytes(config.anonymous_mappings_addr)),
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
@@ -198,6 +201,8 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
             output_stream: Box::new(output_stream::DropOutputStream::new()),
             input_stream: tokens::TokenStream::empty(),
+
+            config
         }.with_operations(operations::get_operations())
     }
 
@@ -235,6 +240,10 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
     pub fn current_instruction(&self) -> Option<definition::ExecutionToken> {
         self.current_instruction
+    }
+
+    pub fn config(&self) -> &config::ForthConfig {
+        &self.config
     }
 
     // memory operations
