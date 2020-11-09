@@ -31,7 +31,8 @@ pub fn loop_plus_compiletime(state: &mut evaluate::ForthState) -> evaluate::Fort
 
     // get the address of the top of the loop, and patch the conditional branch at the end of the loop
     let loop_address = state.stack.pop()?;
-    state.data_space.push(state.compiled_instructions.compiler().branch_false(loop_address));
+    let data_space_end = state.data_space.get_end();
+    state.data_space.push(state.compiled_instructions.compiler().relative_branch_false(data_space_end, loop_address));
 
     // add an epilogue to pop the state off of the return stack
     state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
@@ -64,14 +65,16 @@ pub fn begin_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 
 pub fn until_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let loop_address = state.stack.pop()?;
-    state.data_space.push(state.compiled_instructions.compiler().branch_false(loop_address));
+    let data_space_end = state.data_space.get_end();
+    state.data_space.push(state.compiled_instructions.compiler().relative_branch_false(data_space_end, loop_address));
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
     state.write(loop_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn again_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
     let loop_address = state.stack.pop()?;
-    state.data_space.push(state.compiled_instructions.compiler().branch(loop_address));
+    let data_space_end = state.data_space.get_end();
+    state.data_space.push(state.compiled_instructions.compiler().relative_branch(data_space_end, loop_address));
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
     state.write(loop_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
@@ -88,20 +91,29 @@ pub fn repeat_loop(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
 
     // add a branch instruction to the beginning of the loop unconditionally
     let loop_start_address = state.stack.pop()?;
-    state.data_space.push(state.compiled_instructions.compiler().branch(loop_start_address));
+    let data_space_end = state.data_space.get_end();
+    state.data_space.push(state.compiled_instructions.compiler().relative_branch(data_space_end, loop_start_address));
 
     // back patch the conditional branch in the middle of the loop
     let loop_middle_address = state.data_space.top();
-    state.data_space.write(branch_address, state.compiled_instructions.compiler().branch_false(loop_middle_address))?;
+    state.data_space.write(branch_address, state.compiled_instructions.compiler().relative_branch_false(branch_address, loop_middle_address))?;
 
     // fill in the blank space at the beginning of the loop with the address of the end of the loop so that it gets pushed onto the stack for leave instructions
     state.write(loop_start_address.minus_cell(Cells::cells(2)), evaluate::definition::ExecutionToken::Number(state.data_space.top().to_number()))
 }
 
 pub fn leave(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
-    state.return_stack.pop::<value::DoubleValue>()?;
-    let end_of_loop_address = state.return_stack.pop()?;
-    state.jump_to(end_of_loop_address)
+    state.data_space.push(evaluate::definition::ExecutionToken::Number(state.data_space.top().plus_cell(Cells::cells(2)).to_number()));
+    state.data_space.push(evaluate::definition::ExecutionToken::LeafOperation(|state| {
+        // pop the old base.  this is the address of the leave instruction when it was first compiled.  if it was relocated, use the new instruction pointer to perform a translation
+        let base: Bytes = state.stack.pop()?;
+
+        state.return_stack.pop::<value::DoubleValue>()?;
+        let end_of_loop_address: memory::Address = state.return_stack.pop()?;
+
+        state.relative_jump_to(false, end_of_loop_address.get() - base)
+    }));
+    Ok(())
 }
 
 pub fn exit(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
@@ -139,7 +151,7 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("AGAIN", true, again_loop),
         ("WHILE", true, while_loop),
         ("REPEAT", true, repeat_loop),
-        ("LEAVE", false, leave),
+        ("LEAVE", true, leave),
         ("EXIT", false, exit),
         ("THROW", false, throw),
         ("EVALUATE", false, evaluate_string),

@@ -78,6 +78,10 @@ impl Address {
         Address(self.0 + n)
     }
 
+    pub fn minus(self, n: Bytes) -> Self {
+        Address(self.0 - n)
+    }
+
     pub fn to_number(self) -> generic_numbers::Number {
         self.0.get_bytes() as generic_numbers::Number
     }

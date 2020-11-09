@@ -341,6 +341,18 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         self.instruction_pointer = Some(address);
         Ok(())
     }
+    
+    pub fn relative_jump_to(&mut self, negative: bool, offset: Bytes) -> ForthResult {
+        self.instruction_pointer = self.instruction_pointer.map(|addr| {
+            if negative {
+                addr.get() - offset
+            } else {
+                addr.get() + offset
+            }
+        }).map(|bytes| memory::Address::from_raw(bytes));
+
+        Ok(())
+    }
 
     pub fn set_compilemode(&mut self) -> ForthResult {
         self.execution_mode = ExecutionMode::Compile;

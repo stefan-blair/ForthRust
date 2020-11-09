@@ -1,6 +1,6 @@
 use crate::evaluate::{self, definition};
 use crate::memory;
-use crate::environment::{generic_numbers, value};
+use crate::environment::{generic_numbers, value, units};
 use super::CompiledInstructions;
 
 
@@ -74,6 +74,55 @@ impl ToString for BranchFalse {
     }
 }
 
+#[derive(Clone)]
+struct RelativeBranchMeta(bool, units::Bytes);
+impl RelativeBranchMeta {
+    fn new(instruction_pointer: memory::Address, destination: memory::Address) -> Self {
+        let instruction_pointer = instruction_pointer.plus_cell(units::Cells::one());
+        if destination.get() < instruction_pointer.get() {
+            Self(true, instruction_pointer.get() - destination.get())
+        } else {
+            Self(false, destination.get() - instruction_pointer.get())
+        }
+    }
+}
+impl ToString for RelativeBranchMeta {
+    fn to_string(&self) -> String {
+        let sign = if self.0 { "-" } else { "+" };
+        format!("[ip {} {}]", sign, self.1.to_string())
+    }
+}
+
+#[derive(Clone)]
+struct RelativeBranch(RelativeBranchMeta);
+impl<'a> CompiledInstruction<'a> for RelativeBranch {
+    fn execute(&self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+        state.relative_jump_to(self.0.0, self.0.1)
+    }
+}
+impl ToString for RelativeBranch {
+    fn to_string(&self) -> String {
+        format!("jmp {}", self.0.to_string())
+    }
+}
+
+#[derive(Clone)]
+struct RelativeBranchFalse(RelativeBranchMeta);
+impl<'a> CompiledInstruction<'a> for RelativeBranchFalse {
+    fn execute(&self, state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+        if state.stack.pop::<generic_numbers::UnsignedNumber>()? > 0 {
+            Ok(())
+        } else {
+            state.relative_jump_to(self.0.0, self.0.1)
+        }
+    }
+}
+impl ToString for RelativeBranchFalse {
+    fn to_string(&self) -> String {
+        format!("jz {}", self.0.to_string())
+    }
+}
+
 pub struct InstructionCompiler<'b, 'a> {
     pub compiled_instructions: &'b mut CompiledInstructions<'a>
 }
@@ -85,6 +134,14 @@ impl<'b, 'a> InstructionCompiler<'b, 'a> {
     
     pub fn branch(&mut self, destination: memory::Address) -> definition::ExecutionToken {
         self.compile_instruction(Branch(destination))
+    }
+
+    pub fn relative_branch(&mut self, instruction_pointer: memory::Address, destination: memory::Address) -> definition::ExecutionToken {
+        self.compile_instruction(RelativeBranch(RelativeBranchMeta::new(instruction_pointer, destination)))
+    }
+
+    pub fn relative_branch_false(&mut self, instruction_pointer: memory::Address, destination: memory::Address) -> definition::ExecutionToken {
+        self.compile_instruction(RelativeBranchFalse(RelativeBranchMeta::new(instruction_pointer, destination)))
     }
     
     pub fn push<N: value::ValueVariant + 'a>(&mut self, value: N) -> definition::ExecutionToken {

@@ -20,6 +20,7 @@ pub fn start_word_compilation(state: &mut ForthState) -> ForthResult {
 
 pub fn end_word_compilation(state: &mut ForthState) -> ForthResult {
     postpone!(state, super::control_flow_operations::control_flow_break);
+    // clear any declared temp values
     state.definitions.clear_temp();
     set_interpret(state)
 }
@@ -154,7 +155,7 @@ pub fn locals<T: closing_tokens::ClosingToken>(state: &mut ForthState) -> ForthR
     }
 
     let jmp_destination = state.data_space.top();
-    state.data_space.write(jmp_addr, state.compiled_instructions.compiler().branch(jmp_destination))
+    state.data_space.write(jmp_addr, state.compiled_instructions.compiler().relative_branch(jmp_addr, jmp_destination))
 }
 
 pub fn execution_mode_address(state: &mut ForthState) -> ForthResult {

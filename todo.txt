@@ -1,6 +1,8 @@
 
 implementation:
-    
+
+    add relative jumps
+
     add threads
 
     track lengths of functions in cells
