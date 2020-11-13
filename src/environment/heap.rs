@@ -1,6 +1,6 @@
 use crate::evaluate::{ForthResult, Error};
 use crate::environment::{value::{Value}, generic_numbers::AsValue, units::{Bytes, Cells, Pages}};
-use super::memory::{self, MemorySegment};
+use super::memory::{MemorySegment, Address};
 
 
 const SMALLBIN_SIZE: Cells = Bytes::bytes(0x200).to_cells();
@@ -12,17 +12,17 @@ const PAGES_PER_RANGE: Pages = Pages::pages(16);
 
 struct PageRange {
     // address of the first page.  must start at some multiple of 0x10000
-    base: memory::Address,
+    base: Address,
     // the array of actual memory
     memory: Vec<Value>,
     // the size of all chunks within this page range, in cells
     chunk_size: Cells,
     // a list of all available chunks that are before the empty tail area
-    available: Vec<memory::Address>,
+    available: Vec<Address>,
 }
 
 impl PageRange {
-    fn new(base: memory::Address, chunk_size: Cells) -> Self {
+    fn new(base: Address, chunk_size: Cells) -> Self {
         Self {
             base, chunk_size,
             memory: Vec::new(),
@@ -38,7 +38,7 @@ impl PageRange {
         self.num_cells().to_pages() == PAGES_PER_RANGE && self.available.len() == 0
     }
 
-    fn allocate_next(&mut self) -> Result<memory::Address, Error> {
+    fn allocate_next(&mut self) -> Result<Address, Error> {
         if self.available.len() > 0 {
             Ok(self.available.pop().unwrap())
         } else if PAGES_PER_RANGE.to_cells() - self.num_cells() >= self.chunk_size {
@@ -50,11 +50,11 @@ impl PageRange {
         }
     }
 
-    fn in_range(&self, address: memory::Address) -> bool {
+    fn in_range(&self, address: Address) -> bool {
         address.between(self.base, self.base.plus_cell(self.num_cells()))
     }
 
-    fn free(&mut self, address: memory::Address) {
+    fn free(&mut self, address: Address) {
         if address.offset_from(self.base).to_cells() + self.chunk_size == self.num_cells() {
             self.memory.resize((self.num_cells() - self.chunk_size).get_cells(), 0.value());
         } else {
@@ -62,14 +62,36 @@ impl PageRange {
         }
     }
 
-    fn write(&mut self, address: memory::Address, value: Value) {
-        let offset = address.offset_from(self.base).to_cells().get_cells();
+    fn cell_offset(&self, address: Address) -> Cells {
+        address.offset_from(self.base).to_cells()
+    }
+
+    fn write(&mut self, address: Address, value: Value) {
+        let offset = self.cell_offset(address).get_cells();
         self.memory[offset] = value
     }
 
-    fn read(&self, address: memory::Address) -> Value {
-        let offset = address.offset_from(self.base).to_cells().get_cells();
+    fn read(&self, address: Address) -> Value {
+        let offset = self.cell_offset(address).get_cells();
         self.memory[offset]
+    }
+
+    fn write_values(&mut self, address: Address, values: &[Value]) {
+        let start = self.cell_offset(address).get_cells();
+        let end = self.cell_offset(address.plus_cell(Cells::cells(values.len()))).get_cells();
+
+        let slice = &mut self.memory[start..end];
+        slice.copy_from_slice(values);
+    }
+
+    fn read_values(&self, address: Address, len: usize) -> Vec<Value> {
+        let start = self.cell_offset(address).get_cells();
+        let end = self.cell_offset(address.plus_cell(Cells::cells(len))).get_cells();
+
+        let mut results = vec![0.value(); len];
+        results.copy_from_slice(&self.memory[start..end]);
+
+        results
     }
 }
 
@@ -149,7 +171,7 @@ impl Bins {
 }
 
 pub struct Heap {
-    base: memory::Address,
+    base: Address,
     bins: Bins,
     size_lookup: Vec<Cells>,
 }
@@ -157,13 +179,13 @@ pub struct Heap {
 impl Heap {
     pub fn new(base: usize) -> Self {
         Self {
-            base: memory::Address::from_raw(Bytes::bytes(base)), 
+            base: Address::from_raw(Bytes::bytes(base)), 
             bins: Bins::new(),
             size_lookup: Vec::new(),
         }
     }
 
-    pub fn allocate(&mut self, size: Bytes) -> Result<memory::Address, Error> {
+    pub fn allocate(&mut self, size: Bytes) -> Result<Address, Error> {
         // get the adjusted size, and corresponding table
         let (size, table) = self.bins.get_bin_mut(size.to_cells()).get_page_ranges_mut(size.to_cells())?;
 
@@ -194,11 +216,11 @@ impl Heap {
         available_range.allocate_next()
     }
 
-    pub fn free(&mut self, address: memory::Address) -> ForthResult {
+    pub fn free(&mut self, address: Address) -> ForthResult {
         self.get_containing_range_mut(address).map(|range| range.free(address))
     }
 
-    pub fn resize(&mut self, address: memory::Address, size: Bytes) -> Result<memory::Address, Error> {
+    pub fn resize(&mut self, address: Address, size: Bytes) -> Result<Address, Error> {
         let old_size = self.lookup_size(address)?;
         if old_size < size.to_cells() {
             self.free(address)?;
@@ -208,7 +230,7 @@ impl Heap {
         }
     }
 
-    fn lookup_size(&self, address: memory::Address) -> Result<Cells, Error> {
+    fn lookup_size(&self, address: Address) -> Result<Cells, Error> {
         let index = address.offset_from(self.base).to_pages() / PAGES_PER_RANGE;
         if index >= self.size_lookup.len() {
             return Err(Error::InvalidAddress)
@@ -217,7 +239,7 @@ impl Heap {
         Ok(self.size_lookup[index])
     }
 
-    fn get_containing_range_mut(&mut self, address: memory::Address) -> Result<&mut PageRange, Error> {
+    fn get_containing_range_mut(&mut self, address: Address) -> Result<&mut PageRange, Error> {
         let size = self.lookup_size(address)?;
         let (_, table) = self.bins.get_bin_mut(size).get_page_ranges_mut(size)?;
         
@@ -230,7 +252,7 @@ impl Heap {
         Err(Error::InvalidAddress)
     }
 
-    fn get_containing_range(&self, address: memory::Address) -> Result<&PageRange, Error> {
+    fn get_containing_range(&self, address: Address) -> Result<&PageRange, Error> {
         let size = self.lookup_size(address)?;
         let (_, table) = self.bins.get_bin(size).get_page_ranges(size)?;
 
@@ -245,24 +267,42 @@ impl Heap {
 }
 
 impl MemorySegment for Heap {
-    fn get_base(&self) -> memory::Address {
+    fn get_base(&self) -> Address {
         self.base
     }
 
-    fn get_end(&self) -> memory::Address {
+    fn get_end(&self) -> Address {
         self.base.plus(PAGES_PER_RANGE.to_bytes() * self.size_lookup.len())
     }
 
-    fn write_value(&mut self, address: memory::Address, value: Value) -> Result<(), Error> {        
+    fn write_value(&mut self, address: Address, value: Value) -> Result<(), Error> {        
         self.get_containing_range_mut(address).map(|range| {            
             range.write(address, value)
         })
     }
 
-    fn read_value(&self, address: memory::Address) -> Result<Value, Error> {
+    fn read_value(&self, address: Address) -> Result<Value, Error> {
         self.get_containing_range(address).map(|range| {
             range.read(address)
         })
+    }
+
+    fn write_values(&mut self, address: Address, values: &[Value]) -> ForthResult {
+        let range = self.get_containing_range_mut(address)?;
+        if range.in_range(address.plus_cell(Cells::cells(values.len()))) {
+            Ok(range.write_values(address, values))
+        } else {
+            Err(Error::InvalidAddress)
+        }
+    }
+
+    fn read_values(&self, address: Address, len: Cells) -> Result<Vec<Value>, Error> {
+        let range = self.get_containing_range(address)?;
+        if range.in_range(address.plus_cell(len)) {
+            Ok(range.read_values(address, len.get_cells()))
+        } else {
+            Err(Error::InvalidAddress)
+        }
     }
 }
 

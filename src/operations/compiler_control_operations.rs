@@ -9,18 +9,39 @@ pub fn set_compile(state: &mut ForthState) -> ForthResult { state.set_compilemod
 
 pub fn start_word_compilation(state: &mut ForthState) -> ForthResult {
     let word = state.input_stream.next_word()?;
+
+    /*
+     * Add space before the definition begins to hold metadata.
+     * Length (in bytes) of the definition
+     */
+    state.data_space.push_none::<value::Value>();
+
     let execution_token = evaluate::definition::ExecutionToken::Definition(state.data_space.top());
 
     // the IMMEDIATE keyword will edit the definition to be immediate
     state.definitions.add(word, evaluate::definition::Definition::new(execution_token, false));
+    // add function prologue to initialize the return stack
+    postpone!(state, super::stack_operations::push_stack_frame);
 
     set_compile(state)
 }
 
 pub fn end_word_compilation(state: &mut ForthState) -> ForthResult {
+    // add epologue popping the stack frame and returning to the caller
+    postpone!(state, super::stack_operations::pop_stack_frame);
     postpone!(state, super::control_flow_operations::control_flow_break);
+
     // clear any declared temp values
     state.definitions.clear_temp();
+
+    // add in the length of the function at the beginning (leave space)
+    if let evaluate::definition::ExecutionToken::Definition(address) = state.definitions.most_recent_definition().execution_token {
+        let length_address = address.minus_cell(Cells::one());
+        let length = state.data_space.top().offset_from(address);
+
+        state.data_space.write(length_address, length)?;
+    }
+
     set_interpret(state)
 }
 
@@ -157,6 +178,35 @@ pub fn locals<T: closing_tokens::ClosingToken>(state: &mut ForthState) -> ForthR
     state.data_space.write(jmp_addr, state.compiled_instructions.compiler().relative_branch(jmp_addr, jmp_destination))
 }
 
+pub fn compile_xt(state: &mut ForthState) -> ForthResult {
+    let xt = state.stack.pop()?;
+    let mut copied = false;
+
+    if let definition::ExecutionToken::Definition(addr) = xt {
+        let length = state.data_space.read::<Bytes>(addr.minus_cell(Cells::one()))?;
+        if length < Bytes::bytes(state.config().definition_copy_threshold) {
+            // get the number of cells to copy
+            let num_cells = length.to_cells();
+            // get the address of the top of the data space, which is where the inlined definition should be copied
+            let top = state.data_space.top();
+            // clear space to copy the inlined definition
+            state.data_space.expand(num_cells);
+            // read and then write the inlined definition
+            let inlined = state.data_space.read_values(addr, num_cells)?;
+            state.data_space.write_values(top, &inlined[..])?;
+            copied = true;
+        }
+        // make the return stack construction / destruction into instructions, so that the relocation doesn't interfere with it     
+    }
+
+    // if the execution topen was not copied / inlined, then call it directly
+    if !copied {
+        state.data_space.push(xt)        
+    }
+
+    Ok(())
+}
+
 pub fn execution_mode_address(state: &mut ForthState) -> ForthResult {
     Ok(state.stack.push(state.internal_state_memory().execution_mode.address))
 }
@@ -182,7 +232,9 @@ pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
         ("_B", false, write_branch),
         // locals
         ("LOCALS|", true, locals::<closing_tokens::Pipe>),
-        ("{", true, locals::<closing_tokens::CurlyBracket>)
+        ("{", true, locals::<closing_tokens::CurlyBracket>),
+        // compilation words
+        ("COMPILE,", false, compile_xt)
     ]
 }
 

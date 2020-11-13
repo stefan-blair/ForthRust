@@ -291,8 +291,14 @@ pub trait MemorySegment {
             Err(Error::InvalidAddress)
         }
     }
+    fn cell_offset(&self, address: Address) -> Result<Cells, Error> {
+        self.check_address(address).map(|_| address.offset_from(self.get_base()).containing_cells())
+    }
     fn write_value(&mut self, address: Address, value: value::Value) -> ForthResult;
     fn read_value(&self, address: Address) -> Result<value::Value, Error>;
+
+    fn write_values(&mut self, address: Address, values: &[value::Value]) -> ForthResult;
+    fn read_values(&self, address: Address, len: Cells) -> Result<Vec<value::Value>, Error>;
 
     fn write<T: value::ValueVariant>(&mut self, address: Address, value: T) -> ForthResult where Self: Sized {
         value.write_to_memory(self, address)
@@ -352,6 +358,8 @@ impl Memory {
     pub fn debug_only_get_vec<'a>(&'a self) -> &'a Vec<value::Value> {
         &self.memory
     }
+
+    // read chunk (address and length) and write chunk (address and length), time it vs. manual loop one at a time
 }
 
 impl MemorySegment for Memory {
@@ -364,24 +372,67 @@ impl MemorySegment for Memory {
     }
 
     fn write_value(&mut self, address: Address, value: value::Value) -> ForthResult {
-        self.check_address(address).map(|_| {
-            let index = address.offset_from(self.base).containing_cells().get_cells();
-            if index >= self.memory.len() {
-                self.memory.resize(index + 1, 0.value())
-            }
-            self.memory[index] = value
-        })
+        let index = self.cell_offset(address)?.get_cells();
+        if index >= self.memory.len() {
+            self.memory.resize(index + 1, 0.value())
+        }
+        self.memory[index] = value;
+        Ok(())
     }
 
     fn read_value(&self, address: Address) -> Result<value::Value, Error> {
-        self.check_address(address).map(|_|{
-            let index = address.offset_from(self.base).containing_cells().get_cells();
-            if index >= self.memory.len() {
-                0.value()
-            } else {
-                self.memory[index]
-            }
+        let index = self.cell_offset(address)?.get_cells();
+        Ok(if index >= self.memory.len() {
+            0.value()
+        } else {
+            self.memory[index]
         })
+    }
+
+    fn write_values(&mut self, address: Address, values: &[value::Value]) -> ForthResult {
+        if values.len() == 0 {
+            return Ok(())
+        }
+
+        // get the start and end indexes
+        let start = self.cell_offset(address)?.get_cells();
+        let end = self.cell_offset(address.plus_cell(Cells::cells(values.len() - 1)))?.get_cells();
+
+        // make sure there is enough actually allocated space
+        if end >= self.memory.len() {
+            self.memory.resize(end + 1, 0.value())
+        }
+
+        // copy the given values into the slice
+        let slice = &mut self.memory[start..end + 1];
+        slice.copy_from_slice(values);
+
+        Ok(())    
+    }
+
+    fn read_values(&self, address: Address, len: Cells) -> Result<Vec<value::Value>, Error> {
+        let mut num_cells = len.get_cells();
+        if num_cells == 0 { 
+            return Ok(Vec::new())
+        }
+
+        // get the start and end indexes
+        let start = self.cell_offset(address)?.get_cells();
+        let mut end = self.cell_offset(address.plus_cell(len - Cells::one()))?.get_cells();
+
+        // allocate the results vector
+        let mut results = vec![0.value(); num_cells];
+
+        // if the range extends beyond the length of allocated space, only copy what is available, and leave the rest as 0
+        if end >= self.memory.len() {
+            end = self.memory.len() - 1;
+            num_cells = end + 1 - start;
+        }
+
+        let slice = &mut results[..num_cells];
+        slice.copy_from_slice(&self.memory[start..end + 1]);
+
+        Ok(results)
     }
 }
 

@@ -89,15 +89,35 @@ impl MemorySegment for Stack {
     }
 
     fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
-        self.check_address(address).map(|_| {
-            self.stack[address.offset_from(self.base).to_cells().get_cells()] = value
-        })
+        self.cell_offset(address).map(|cells| self.stack[cells.get_cells()] = value)
     }
 
     fn read_value(&self, address: Address) -> Result<value::Value, Error> {
-        self.check_address(address).map(|_|{
-            self.stack[address.offset_from(self.base).to_cells().get_cells()]
-        })
+        self.cell_offset(address).map(|cells| self.stack[cells.get_cells()])
+    }
+
+    fn write_values(&mut self, address: Address, values: &[value::Value]) -> ForthResult {
+        // get the start and end indexes
+        let start = self.cell_offset(address)?.get_cells();
+        let end = self.cell_offset(address.plus_cell(Cells::cells(values.len() - 1)))?.get_cells();
+
+        // copy the given values into the slice
+        let slice = &mut self.stack[start..end + 1];
+        slice.copy_from_slice(values);
+
+        Ok(())    
+    }
+
+    fn read_values(&self, address: Address, len: Cells) -> Result<Vec<value::Value>, Error> {
+        // get the start and end indexes
+        let start = self.cell_offset(address)?.get_cells();
+        let end = self.cell_offset(address.plus_cell(len - Cells::one()))?.get_cells();
+
+        // allocate the results vector
+        let mut results = vec![0.value(); len.get_cells()];
+        results.copy_from_slice(&self.stack[start..end + 1]);
+
+        Ok(results)
     }
 }
 

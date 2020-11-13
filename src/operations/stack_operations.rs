@@ -2,61 +2,71 @@ use super::*;
 
 
 // return stack commands
-pub fn stack_to_return_stack<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn stack_to_return_stack<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     state.return_stack.push(state.stack.pop::<T>()?); 
     Ok(()) 
 }
 
-pub fn return_stack_to_stack<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn return_stack_to_stack<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     state.stack.push(state.return_stack.pop::<T>()?); 
     Ok(()) 
 }
 
-pub fn copy_from_return_stack<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn copy_from_return_stack<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     state.stack.push(state.return_stack.peek::<T>()?); 
     Ok(()) 
 }
 
+pub fn push_stack_frame(state: &mut ForthState) -> ForthResult {
+    state.return_stack.push_frame();
+    Ok(())
+}
+
+pub fn pop_stack_frame(state: &mut ForthState) -> ForthResult {
+    state.return_stack.pop_frame()?;
+    Ok(())
+}
+
 // argument stack commands
-pub fn dup<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn dup<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     let value = state.stack.peek::<T>()?;
     state.stack.push(value); 
     Ok(()) 
 }
-pub fn drop<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { state.stack.pop::<T>()?; Ok(()) }
-pub fn swap<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn drop<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { state.stack.pop::<T>()?; Ok(()) }
+pub fn swap<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     let (a, b): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(a);
     state.stack.push(b);
     Ok(())
 }
-pub fn over<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn over<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     let (a, b): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(b);
     state.stack.push(a);
     state.stack.push(b);
     Ok(())
 }
-pub fn rot<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult { 
+pub fn rot<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult { 
     let (a, b, c): (T, T, T) = (state.stack.pop()?, state.stack.pop()?, state.stack.pop()?);
     state.stack.push(b);
     state.stack.push(a);
     state.stack.push(c);
     Ok(())
 }
-pub fn nrot<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+pub fn nrot<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult {
     let (a, b, c): (T, T, T) = (state.stack.pop()?, state.stack.pop()?, state.stack.pop()?);
     state.stack.push(c);
     state.stack.push(a);
     state.stack.push(b);
     Ok(())
 }
-pub fn nip<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+pub fn nip<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult {
     let (a, _): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(a);
     Ok(())
 }
-pub fn tuck<T: value::ValueVariant>(state: &mut evaluate::ForthState) -> evaluate::ForthResult {
+pub fn tuck<T: value::ValueVariant>(state: &mut ForthState) -> ForthResult {
     let (a, b): (T, T) = (state.stack.pop()?, state.stack.pop()?);
     state.stack.push(a);
     state.stack.push(b);
@@ -86,6 +96,10 @@ macro_rules! stack_operations {
 pub fn get_operations() -> Vec<(&'static str, bool, super::Operation)> {
     let mut operations = stack_operations!("", value::Value);
     operations.append(&mut stack_operations!("2", value::DoubleValue));
+    operations.append(&mut vec![
+        ("PUSH_FRAME", false, push_stack_frame),
+        ("POP_FRAME", false, pop_stack_frame)
+    ]);
 
     operations
 }

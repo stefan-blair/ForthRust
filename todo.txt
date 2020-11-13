@@ -1,16 +1,27 @@
 
 implementation:
 
-    add relative jumps
+    make COMPILE, just pop xt, and call some compile function that is also used for standard compilation, performing optimizations along the way
+
+    test the speed of the builtin read_values / write_values vs. doing it all in a loop
+
+    does there need to be both Value::Number and ExecutionToken::Number?
 
     add threads
 
     track lengths of functions in cells
-    traits can have const values.  can use this to hardcode settings in a forth machine, for example, the ideal inline length
 
 notable absent words:
 
     COMPILE,: seems to pop an execution token off of the stack and literally compile it into the current definition.  so, if its just a DefinedOperation, it just puts the execution token.  but if its something like `+`, it literally compiles the code into it
+    :NONAME
+
+    DEFER .. IS
+
+    : BUFFER: ( n -- )   CREATE ALLOT ;
+
+    CASE: Mark the start of the CASE...OF...ENDOF...ENDCASE structure. Append the run-time semantics given below to the current definition.
+    http://lars.nocrew.org/forth2012/core/CASE.html
 
 debugger: 
     
@@ -19,3 +30,8 @@ debugger:
     remove all of the unwraps from Debugger
     Make the debugger into an optional feature
     Check if starts with H and then add the format in
+
+
+optimizer:
+    do inlining automatically
+    figure out a way to detect if a return stack frame is necessary

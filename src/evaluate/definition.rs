@@ -203,8 +203,8 @@ impl DefinitionTable {
         self.definitions[self.most_recent].immediate = true
     }
 
-    pub fn most_recent_definition(&mut self) -> &mut Definition {
-        &mut self.definitions[self.most_recent]
+    pub fn most_recent_definition(&self) -> &Definition {
+        &self.definitions[self.most_recent]
     }
 
     pub fn add(&mut self, word: String, definition: Definition) {

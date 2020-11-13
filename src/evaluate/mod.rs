@@ -3,7 +3,7 @@ pub mod kernels;
 pub mod config;
 
 use crate::operations;
-use crate::environment::{memory::{self, MemorySegment}, stack, heap, value::{self, ValueVariant}, units::{Bytes, Cells, Pages}};
+use crate::environment::{memory::{self, MemorySegment, Address}, stack, heap, value::{self, ValueVariant}, units::{Bytes, Cells, Pages}};
 use crate::io::{tokens, output_stream};
 use crate::compiled_instructions;
 
@@ -148,7 +148,7 @@ pub struct ForthState<'a, 'i, 'o> {
     // a vector of unnamed anonymous pages
     anonymous_pages: Vec<memory::Memory>,
     // the address of the base of the next anonymous page
-    next_anonymous_mapping: memory::Address,
+    next_anonymous_mapping: Address,
     // named memory segments
     pub return_stack: stack::Stack,
     pub stack: stack::Stack,
@@ -158,7 +158,7 @@ pub struct ForthState<'a, 'i, 'o> {
 
     execution_mode: ExecutionMode,
     // pointer to the next instruction to execute
-    instruction_pointer: Option<memory::Address>,
+    instruction_pointer: Option<Address>,
     // contains the current instruction, if any, being executed
     current_instruction: Option<definition::ExecutionToken>,
     pub definitions: definition::DefinitionTable,
@@ -193,7 +193,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
             data_space, stack, return_stack, pad, heap, memory_map, internal_state_memory, 
             anonymous_pages: Vec::new(),
-            next_anonymous_mapping: memory::Address::from_raw(Bytes::bytes(config.anonymous_mappings_addr)),
+            next_anonymous_mapping: Address::from_raw(Bytes::bytes(config.anonymous_mappings_addr)),
 
             execution_mode: ExecutionMode::Interpret,
             instruction_pointer: None,
@@ -234,7 +234,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         self.execution_mode
     }
 
-    pub fn instruction_pointer(&self) -> Option<memory::Address> {
+    pub fn instruction_pointer(&self) -> Option<Address> {
         self.instruction_pointer
     }
 
@@ -263,11 +263,11 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         }
     }
 
-    pub fn check_address(&self, address: memory::Address) -> ForthResult {
+    pub fn check_address(&self, address: Address) -> ForthResult {
         self.get_memory_segment(self.memory_map.get(address)?)?.check_address(address)
     }
 
-    pub fn write<T: value::ValueVariant>(&mut self, address: memory::Address, value: T) -> Result<(), Error> {
+    pub fn write<T: value::ValueVariant>(&mut self, address: Address, value: T) -> Result<(), Error> {
         let entry = self.memory_map.get(address)?;
         if entry.permissions.write {
             value.write_to_memory(self.get_mut_memory_segment(entry)?, address)
@@ -276,10 +276,28 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         }
     }
 
-    pub fn read<T: value::ValueVariant>(&self, address: memory::Address) -> Result<T, Error> {
+    pub fn read<T: value::ValueVariant>(&self, address: Address) -> Result<T, Error> {
         let entry = self.memory_map.get(address)?;
         if entry.permissions.read {
             T::read_from_memory(self.get_memory_segment(entry)?, address)
+        } else {
+            Err(Error::InsufficientPermissions)
+        }
+    }
+
+    pub fn write_values(&mut self, address: Address, values: &[value::Value]) -> ForthResult {
+        let entry = self.memory_map.get(address)?;
+        if entry.permissions.write {
+            self.get_mut_memory_segment(entry)?.write_values(address, values)
+        } else {
+            Err(Error::InsufficientPermissions)
+        }
+    }
+
+    pub fn read_values(&self, address: Address, len: Cells) -> Result<Vec<value::Value>, Error> {
+        let entry = self.memory_map.get(address)?;
+        if entry.permissions.read {
+            self.get_memory_segment(entry)?.read_values(address, len)
         } else {
             Err(Error::InsufficientPermissions)
         }
@@ -295,14 +313,14 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         }
     }
 
-    pub fn create_anonymous_mapping(&mut self, num_pages: Pages) -> Result<memory::Address, Error> {
+    pub fn create_anonymous_mapping(&mut self, num_pages: Pages) -> Result<Address, Error> {
         let base = self.next_anonymous_mapping;
         self.next_anonymous_mapping.add(num_pages.to_bytes());
 
         self.create_anonymous_mapping_at(base, num_pages)
     }
 
-    pub fn create_anonymous_mapping_at(&mut self, address: memory::Address, num_pages: Pages) -> Result<memory::Address, Error> {
+    pub fn create_anonymous_mapping_at(&mut self, address: Address, num_pages: Pages) -> Result<Address, Error> {
         let index = self.anonymous_pages.len();
 
         self.anonymous_pages
@@ -322,22 +340,20 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
         }
     }
 
-    pub fn call(&mut self, address: memory::Address) -> ForthResult {
+    pub fn call(&mut self, address: Address) -> ForthResult {
         self.instruction_pointer.replace(address).map(|addr| {
             self.return_stack.push(addr.to_number());
         });
-        self.return_stack.push_frame();
 
         Ok(())
     }
 
     pub fn return_from(&mut self) -> ForthResult {
-        self.return_stack.pop_frame()?;
         self.instruction_pointer = self.return_stack.pop().ok();
         Ok(())
     }
 
-    pub fn jump_to(&mut self, address: memory::Address) -> ForthResult {
+    pub fn jump_to(&mut self, address: Address) -> ForthResult {
         self.instruction_pointer = Some(address);
         Ok(())
     }
@@ -349,7 +365,7 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
             } else {
                 addr.get() + offset
             }
-        }).map(|bytes| memory::Address::from_raw(bytes));
+        }).map(|bytes| Address::from_raw(bytes));
 
         Ok(())
     }
@@ -389,19 +405,19 @@ impl<'a, 'i, 'o> ForthState<'a, 'i, 'o> {
 
 #[derive(Clone, Copy)]
 pub struct StateRegister {
-    pub address: memory::Address,
+    pub address: Address,
     read: fn(&ForthState) -> value::Value,
     write: fn(&mut ForthState, value::Value),
 }
 
 impl StateRegister {
-    fn new(address: memory::Address, read: fn(&ForthState) -> value::Value, write: fn(&mut ForthState, value::Value)) -> Self {
+    fn new(address: Address, read: fn(&ForthState) -> value::Value, write: fn(&mut ForthState, value::Value)) -> Self {
         Self { address, read, write }
     }
 }
 
 pub struct InternalStateMemory {
-    pub base: memory::Address,
+    pub base: Address,
     // each state register can be accessed as both a member of the internal state memory, 
     pub execution_mode: StateRegister,
     members: Vec<StateRegister>
@@ -411,13 +427,13 @@ impl InternalStateMemory {
     fn new(base: usize) -> Self {
         // a helper structure for building the internal state memory
         struct Builder {
-            base: memory::Address,
+            base: Address,
             members: Vec<StateRegister>
         };
 
         impl Builder {
             fn new(base: usize) -> Self {
-                Self { base: memory::Address::from_raw(Bytes::bytes(base)), members: Vec::new() }
+                Self { base: Address::from_raw(Bytes::bytes(base)), members: Vec::new() }
             }
 
             fn add(&mut self, read: fn(&ForthState) -> value::Value, write: fn(&mut ForthState, value::Value)) -> StateRegister {
@@ -440,7 +456,7 @@ impl InternalStateMemory {
         );
 
         Self { 
-            base: memory::Address::from_raw(Bytes::bytes(base)),
+            base: Address::from_raw(Bytes::bytes(base)),
             execution_mode,
             members: builder.members
         }
@@ -450,31 +466,57 @@ impl InternalStateMemory {
          Cells::cells(self.members.len())
     }
     
-    fn get_base(&self) -> memory::Address {
+    fn get_base(&self) -> Address {
         self.base
     }
 }
 
 impl memory::MemorySegment for ForthState<'_, '_, '_> {
-    fn get_base(&self) -> memory::Address {
+    fn get_base(&self) -> Address {
         self.internal_state_memory.base
     }
 
-    fn get_end(&self) -> memory::Address {
+    fn get_end(&self) -> Address {
         self.internal_state_memory.base.plus_cell(self.internal_state_memory.len())
     }
 
-    fn write_value(&mut self, address: memory::Address, value: value::Value) -> Result<(), Error> {
-        self.check_address(address)?;
-        let index = address.offset_from(self.get_base()).to_cells().get_cells();
+    fn write_value(&mut self, address: Address, value: value::Value) -> Result<(), Error> {
+        let index = self.cell_offset(address)?.get_cells();
         let write_function = self.internal_state_memory.members[index].write;
         Ok(write_function(self, value))
     }
 
-    fn read_value(&self, address: memory::Address) -> Result<value::Value, Error> {
-        self.check_address(address)?;
-        let index = address.offset_from(self.get_base()).to_cells().get_cells();
+    fn read_value(&self, address: Address) -> Result<value::Value, Error> {
+        let index = self.cell_offset(address)?.get_cells();
         let read_function = self.internal_state_memory.members[index].read;
         Ok(read_function(self))
+    }
+
+    fn write_values(&mut self, address: Address, values: &[value::Value]) -> ForthResult {
+        // get the start and end indexes
+        let start = self.cell_offset(address)?.get_cells();
+        self.check_address(address.plus_cell(Cells::cells(values.len() - 1)))?;
+
+        for (i, v) in values.iter().enumerate().map(|(i, v)| (i + start, *v)) {
+            let write_function = self.internal_state_memory.members[i].write;
+            write_function(self, v);
+        }
+
+        Ok(())
+    }
+
+    fn read_values(&self, address: Address, len: Cells) -> Result<Vec<value::Value>, Error> {
+        // get the start and end indexes
+        let start = self.cell_offset(address)?.get_cells();
+        let end = self.cell_offset(address.plus_cell(len - Cells::one()))?.get_cells();
+
+        // allocate and fill the results vector
+        let mut results = Vec::new();
+        for i in start..end + 1 {
+            let read_function = self.internal_state_memory.members[i].read;
+            results.push(read_function(self))            
+        }
+
+        Ok(results)
     }
 }
