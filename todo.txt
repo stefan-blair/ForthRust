@@ -35,3 +35,12 @@ debugger:
 optimizer:
     do inlining automatically
     figure out a way to detect if a return stack frame is necessary
+
+noteable forth source files:
+    compiler.f
+    optimizer.f
+    data.f
+    preamble.f
+    defining.f
+    prune.f
+    nucleus.f
